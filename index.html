@@ -979,8 +979,8 @@ function renderHolidays(){
     <div class="fpanel">
       <div style="font-size:14px;font-weight:700;margin-bottom:10px">Add Public Holiday</div>
       <div class="fgrid">
-        <div class="fg"><label>Date *</label><input id="hDate" type="date" value="${today}"></div>
-        <div class="fg"><label>Holiday Name *</label><input id="hName" placeholder="e.g. Constitution Day"></div>
+        <div class="fg"><label>Date *</label><input id="holDate" type="date" value="${today}"></div>
+        <div class="fg"><label>Holiday Name *</label><input id="holName" placeholder="e.g. Constitution Day"></div>
       </div>
       <div class="faction">
         <button class="btn" onclick="showHolForm=false;render()">Cancel</button>
@@ -1014,10 +1014,10 @@ function renderHolidays(){
     </div>`;
 }
 function saveHoliday(){
-  const date=document.getElementById('hDate').value;
-  const name=document.getElementById('hName').value.trim();
-  if(!date||!name)return alert('Date and name required.');
-  if(holidays.find(h=>h.date===date))return alert('A holiday already exists on this date.');
+  const date=document.getElementById('holDate').value;
+  const name=document.getElementById('holName').value.trim();
+  if(!date||!name){alert('Date and name required.');return;}
+  if(holidays.find(h=>h.date===date)){alert('A holiday already exists on this date.');return;}
   holidays.push({id:Date.now(),date,name});
   save();showHolForm=false;render();
 }
@@ -1412,4 +1412,26 @@ function disconnectFirebase(){
   }
   // Polish holidays on first run
   if(!localStorage.getItem('hr_hol')){
-    holidays=[
+    holidays=[{id:1,date:'2026-05-01',name:'Labour Day'},{id:2,date:'2026-05-03',name:'Constitution Day'}];
+    save();
+  }
+  // Show MS login button if configured
+  showMsLoginBtn();
+  // Try silent MS Graph load first
+  if(MS_CLIENT_ID && MS_SHARE_URL){
+    initMsal();
+    if(msalApp && msalApp.getAllAccounts().length>0){
+      await loadFromGraph();
+    } else {
+      setSyncStatus('local');
+    }
+  } else if(FIREBASE_URL){
+    await loadFromFirebase();
+  } else {
+    setSyncStatus('local');
+  }
+  buildLoginSel();
+})();
+</script>
+</body>
+</html>
