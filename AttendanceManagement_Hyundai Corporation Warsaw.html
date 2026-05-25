@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attendance Management System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f6fa;color:#1a1a2e;font-size:14px}
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a56db,#0e3a9e)}
+  .login-box{background:#fff;border-radius:16px;padding:36px 32px;width:360px;box-shadow:0 16px 48px rgba(0,0,0,.18)}
+  .login-logo{text-align:center;margin-bottom:24px}
+  .login-logo .icon{font-size:28px;margin-bottom:6px}
+  .login-logo .sub{font-size:13px;color:#888}
+  .login-title{font-size:18px;font-weight:700;margin-bottom:20px;text-align:center}
+  .lf{margin-bottom:14px}
+  .lf label{font-size:12px;color:#666;font-weight:600;display:block;margin-bottom:5px}
+  .lf input,.lf select{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit;outline:none}
+  .lf input:focus,.lf select:focus{border-color:#1a56db}
+  .login-btn{width:100%;padding:12px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:6px}
+  .login-btn:hover{background:#1648c0}
+  .login-err{color:#b91c1c;font-size:12px;text-align:center;margin-top:8px;min-height:18px}
+  .login-foot{margin-top:14px;font-size:12px;color:#aaa;text-align:center}
+  .header{background:#fff;border-bottom:1px solid #e0e0e0;padding:13px 24px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100}
+  .header-title{font-size:16px;font-weight:700}
+  .header-sub{font-size:11px;color:#888;margin-top:1px}
+  .user-pill{display:flex;align-items:center;gap:8px;background:#f0f4ff;border:1px solid #c3d3f9;border-radius:20px;padding:5px 12px 5px 6px}
+  .u-av{width:26px;height:26px;border-radius:50%;background:#1a56db;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+  .u-name{font-size:13px;font-weight:600}
+  .u-role{font-size:11px;color:#888}
+  .logout-btn{padding:6px 12px;border:1px solid #ddd;border-radius:7px;background:#fff;cursor:pointer;font-size:12px;font-family:inherit;color:#666}
+  .container{max-width:1120px;margin:0 auto;padding:20px}
+  .tabs{display:flex;background:#fff;border-radius:10px;border:1px solid #e0e0e0;overflow:hidden;margin-bottom:20px;overflow-x:auto}
+  .tab{flex:1;min-width:100px;padding:10px 8px;border:none;background:transparent;cursor:pointer;font-size:13px;font-family:inherit;color:#888;border-bottom:2px solid transparent;white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:4px}
+  .tab.active{color:#1a1a2e;border-bottom-color:#1a56db;background:#f8f9ff;font-weight:600}
+  .tab:hover:not(.active){background:#f5f6fa;color:#555}
+  .card{background:#fff;border-radius:12px;border:1px solid #e0e0e0;padding:18px;margin-bottom:14px}
+  .card-title{font-size:14px;font-weight:700;margin-bottom:12px}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+  .stat{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:13px}
+  .stat-lbl{font-size:11px;color:#888;margin-bottom:5px}
+  .stat-val{font-size:20px;font-weight:700}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{background:#f8f9fa;padding:8px 12px;text-align:left;font-weight:600;color:#555;font-size:12px;border-bottom:1px solid #e0e0e0}
+  td{padding:8px 12px;border-bottom:1px solid #f0f0f0}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#fafafa}
+  .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+  .badge-success{background:#e6f9f0;color:#0a7c4d}
+  .badge-warning{background:#fff8e1;color:#b45309}
+  .badge-danger{background:#fef2f2;color:#b91c1c}
+  .badge-info{background:#eff6ff;color:#1a56db}
+  .badge-gray{background:#f3f4f6;color:#6b7280}
+  .btn{padding:7px 14px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer;font-size:13px;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+  .btn:hover{background:#f5f6fa}
+  .btn-primary{background:#1a56db;color:#fff;border-color:#1a56db}
+  .btn-primary:hover{background:#1648c0}
+  .btn-success{background:#e6f9f0;color:#0a7c4d;border-color:#a7f3d0}
+  .btn-danger{background:#fef2f2;color:#b91c1c;border-color:#fca5a5}
+  .btn-sm{padding:4px 9px;font-size:12px}
+  input,select{border:1px solid #ddd;border-radius:7px;padding:6px 10px;font-size:13px;font-family:inherit;color:#1a1a2e;background:#fff;outline:none}
+  input:focus,select:focus{border-color:#1a56db}
+  .fg label{font-size:12px;color:#666;display:block;margin-bottom:4px;font-weight:600}
+  .fg input,.fg select{width:100%}
+  .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .fgrid .full{grid-column:1/-1}
+  .faction{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+  .fpanel{background:#f8f9fa;border:1px solid #e0e0e0;border-radius:10px;padding:14px;margin-bottom:14px}
+  .ai{font-size:12px;padding:4px 7px;border:1px solid #ddd;border-radius:6px;background:#fff;font-family:inherit}
+  .emp-card{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:13px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .avatar{width:38px;height:38px;border-radius:50%;background:#e8f0fe;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#1a56db;flex-shrink:0}
+  .lp{height:5px;background:#e0e0e0;border-radius:3px;overflow:hidden;margin-top:6px}
+  .lpb{height:100%;border-radius:3px}
+  .sec-title{font-size:13px;font-weight:700;margin:16px 0 8px;color:#1a1a2e}
+
+  /* ── CALENDAR ── */
+  .cal-wrap{background:#fff;border-radius:12px;border:1px solid #e0e0e0;padding:16px;margin-bottom:14px}
+  .cal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .cal-title{font-size:15px;font-weight:700}
+  .cal-nav{display:flex;gap:6px}
+  .cal-nav button{padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-family:inherit;font-size:13px}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .cal-dow{text-align:center;font-size:11px;font-weight:700;color:#888;padding:4px 0;background:#f8f9fa;border-radius:4px}
+  .cal-dow.sat{color:#1a56db}
+  .cal-dow.sun{color:#b91c1c}
+  .cal-day{border-radius:8px;padding:6px 4px;min-height:62px;border:1px solid transparent;position:relative;font-size:12px}
+  .cal-day:hover{border-color:#ddd;background:#fafafa}
+  .cal-day.other{opacity:.3;background:transparent}
+  .cal-day.today{border-color:#1a56db;background:#f0f4ff}
+  .cal-day.weekend{background:#fafafa}
+  .cal-day.holiday-day{background:#fff8e1;border-color:#f59e0b}
+  .cal-day-num{font-weight:600;font-size:12px;margin-bottom:3px;color:#1a1a2e}
+  .cal-day.weekend .cal-day-num{color:#aaa}
+  .cal-day.holiday-day .cal-day-num{color:#b45309}
+  .cal-holiday-name{font-size:9px;color:#b45309;font-weight:600;line-height:1.2;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cal-dots{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+  .cal-chip{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:8px;font-weight:800;color:#fff;flex-shrink:0;cursor:default;transition:transform .1s;position:relative}
+  .cal-chip:hover{transform:scale(1.3);z-index:10}
+  .cal-chip.norecord{opacity:.3}
+  .cal-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:11px;color:#666}
+  .cal-legend span{display:flex;align-items:center;gap:4px}
+  .cal-legend .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+  /* ── LEAVE STATUS ── */
+  .leave-status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+  .lsc{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:12px}
+  .lsc-name{font-size:13px;font-weight:700}
+  .lsc-pos{font-size:11px;color:#888;margin-bottom:8px}
+  .lsc-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
+
+  /* ── PENDING CARDS ── */
+  .pcard{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:11px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;flex-wrap:wrap;gap:8px}
+  .empty{text-align:center;padding:28px;color:#aaa;font-size:14px}
+  .ok-msg{background:#e6f9f0;border:1px solid #a7f3d0;border-radius:8px;padding:11px 14px;margin-bottom:12px;font-size:13px;color:#0a7c4d}
+  .err-msg{color:#b91c1c;font-size:12px;margin-top:5px;min-height:16px}
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="login-wrap">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="icon">📋</div>
+      <div class="sub">Hyundai Corporation — Warsaw Representative Office</div>
+    </div>
+    <div class="login-title">Attendance Management</div>
+    <div class="lf">
+      <label>Account</label>
+      <select id="loginUser"><option value="">— Select account —</option><option value="admin">Admin</option></select>
+    </div>
+    <div class="lf">
+      <label>Password</label>
+      <input type="password" id="loginPass" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" onclick="doLogin()">Sign In</button>
+    <div class="login-err" id="loginErr"></div>
+    <div class="login-foot">Forgot your password? Contact your administrator.</div>
+  </div>
+</div>
+
+<div id="appScreen" style="display:none">
+  <div class="header">
+    <div>
+      <div class="header-title">📋 Attendance Management System</div>
+      <div class="header-sub">Hyundai Corporation — Warsaw Representative Office</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="user-pill">
+        <div class="u-av" id="hAv">?</div>
+        <div><div class="u-name" id="hName">—</div><div class="u-role" id="hRole">—</div></div>
+      </div>
+      <button class="logout-btn" onclick="logout()">Sign Out</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="tabs" id="tabBar"></div>
+    <div id="content"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════
+// DATA
+// ═══════════════════════════════════
+let employees = JSON.parse(localStorage.getItem('hr_emp')||'null')||[
+  {id:1,name:'Kwangmook Kang',position:'General Manager',annualLeave:15,joinDate:'2020-03-01',username:'km.kang',password:'pass123'},
+  {id:2,name:'Jisu Kim',position:'Sales Manager',annualLeave:15,joinDate:'2021-06-15',username:'jisu.kim',password:'pass123'},
+  {id:3,name:'Hyunwoo Lee',position:'Business Analyst',annualLeave:12,joinDate:'2022-09-01',username:'hw.lee',password:'pass123'},
+];
+let attendance  = JSON.parse(localStorage.getItem('hr_att')||'[]');
+let leaves      = JSON.parse(localStorage.getItem('hr_lv') ||'[]');
+let holidays    = JSON.parse(localStorage.getItem('hr_hol')||'[]');
+// holidays: [{id, date:'YYYY-MM-DD', name}]
+
+function save(){
+  localStorage.setItem('hr_emp',JSON.stringify(employees));
+  localStorage.setItem('hr_att',JSON.stringify(attendance));
+  localStorage.setItem('hr_lv', JSON.stringify(leaves));
+  localStorage.setItem('hr_hol',JSON.stringify(holidays));
+}
+
+// ═══════════════════════════════════
+// AUTH
+// ═══════════════════════════════════
+let session=null;
+let currentTab='dashboard';
+const today=new Date().toISOString().split('T')[0];
+const nowMonth=today.slice(0,7);
+let calMonth=nowMonth;  // calendar month on dashboard
+let selectedMonth=nowMonth;
+let attDate=today;
+let showLvForm=false;
+let showHolForm=false;
+let editLvId=null;
+
+function buildLoginSel(){
+  const sel=document.getElementById('loginUser');
+  sel.innerHTML=`<option value="">— Select account —</option><option value="admin">Admin</option>`+
+    employees.map(e=>`<option value="emp_${e.id}">${e.name} (${e.username})</option>`).join('');
+}
+buildLoginSel();
+
+function doLogin(){
+  const who=document.getElementById('loginUser').value;
+  const pass=document.getElementById('loginPass').value;
+  const err=document.getElementById('loginErr');
+  err.textContent='';
+  if(!who){err.textContent='Please select an account.';return;}
+  if(!pass){err.textContent='Please enter your password.';return;}
+  if(who==='admin'){
+    const stored=localStorage.getItem('hr_adminpass')||'admin123';
+    if(pass!==stored){err.textContent='Incorrect password.';return;}
+    session={role:'admin'};
+  } else {
+    const empId=parseInt(who.replace('emp_',''));
+    const emp=employees.find(e=>e.id===empId);
+    if(!emp||pass!==emp.password){err.textContent='Incorrect password.';return;}
+    session={role:'employee',empId};
+  }
+  document.getElementById('loginPass').value='';
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('appScreen').style.display='block';
+  const isAdmin=session.role==='admin';
+  const emp=isAdmin?null:employees.find(e=>e.id===session.empId);
+  const ini=isAdmin?'AD':emp.name.split(' ').map(w=>w[0]).join('').slice(0,2);
+  document.getElementById('hAv').textContent=ini;
+  document.getElementById('hName').textContent=isAdmin?'Administrator':emp.name;
+  document.getElementById('hRole').textContent=isAdmin?'Full Access':emp.position;
+  buildTabs(); switchTab('dashboard');
+}
+function logout(){
+  session=null; currentTab='dashboard';
+  document.getElementById('appScreen').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+  buildLoginSel();
+}
+
+// ═══════════════════════════════════
+// TABS
+// ═══════════════════════════════════
+function buildTabs(){
+  const isAdmin=session.role==='admin';
+  const tabs=[
+    {id:'dashboard',icon:'📊',label:'Dashboard'},
+    {id:'employees',icon:'👥',label:'Employees',adm:true},
+    {id:'attendance',icon:'⏰',label:'Attendance',adm:true},
+    {id:'leave',icon:'🏖️',label:'Leave'},
+    {id:'holidays',icon:'📅',label:'Holidays',adm:true},
+    {id:'report',icon:'📁',label:'Monthly Report',adm:true},
+  ].filter(t=>isAdmin||!t.adm);
+  document.getElementById('tabBar').innerHTML=tabs.map(t=>
+    `<button class="tab${t.id===currentTab?' active':''}" onclick="switchTab('${t.id}')">${t.icon} ${t.label}</button>`
+  ).join('');
+}
+function switchTab(t){currentTab=t;buildTabs();render();}
+
+// ═══════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════
+const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const STATUS={normal:'Present',late:'Late',early:'Left Early',absent:'Absent',leave:'On Leave'};
+const STATUS_ABBR={normal:'●',late:'L',early:'E',absent:'A',leave:'V'};
+const LEAVE_TYPES=['Annual Leave','Half Day (AM)','Half Day (PM)','Sick Leave','Bereavement','Other'];
+const CLR={normal:'#0a7c4d',late:'#b45309',early:'#b45309',absent:'#b91c1c',leave:'#1a56db'};
+
+function badge(t,c){return`<span class="badge badge-${c}">${t}</span>`;}
+function remColor(rem,tot){const r=rem/tot;return r>0.4?'#0a7c4d':r>0.1?'#b45309':'#b91c1c';}
+function getAtt(empId,date){return attendance.find(a=>a.empId===empId&&a.date===date)||{checkIn:'',checkOut:'',status:'',note:''};}
+function usedLeave(empId){
+  return leaves.filter(l=>l.empId===empId&&l.status==='approved')
+    .reduce((s,l)=>s+(l.type.includes('Half Day')?0.5:l.days),0);
+}
+function isHoliday(date){return holidays.find(h=>h.date===date);}
+function isLeaveDay(empId,date){
+  return leaves.find(l=>l.empId===empId&&l.status==='approved'&&date>=l.startDate&&date<=l.endDate);
+}
+function getDayStatus(empId,date){
+  const dt=new Date(date);
+  const dow=dt.getDay();
+  if(dow===0||dow===6) return 'weekend';
+  if(isHoliday(date)) return 'holiday';
+  if(isLeaveDay(empId,date)) return 'leave';
+  const a=getAtt(empId,date);
+  if(!a.checkIn&&!a.status) return 'norecord';
+  return a.status||'normal';
+}
+function timeToFrac(t){
+  if(!t) return null;
+  const[h,m]=t.split(':').map(Number);
+  return(h*60+m)/1440;
+}
+function calcHours(ci,co){
+  if(!ci||!co) return 8;
+  const[h1,m1]=ci.split(':').map(Number);
+  const[h2,m2]=co.split(':').map(Number);
+  return((h2*60+m2)-(h1*60+m1))/60;
+}
+function excelSerial(dateStr){
+  const[y,mo,d]=dateStr.split('-').map(Number);
+  return Math.floor((Date.UTC(y,mo-1,d)-Date.UTC(1899,11,30))/86400000);
+}
+function updateAtt(empId,date,patch){
+  const idx=attendance.findIndex(a=>a.empId===empId&&a.date===date);
+  if(idx>=0)Object.assign(attendance[idx],patch);
+  else attendance.push({id:Date.now(),empId,date,checkIn:'',checkOut:'',status:'normal',note:'',...patch});
+  save();
+}
+function approveLeave(id,status){leaves=leaves.map(l=>l.id===id?{...l,status}:l);save();render();}
+
+// ═══════════════════════════════════
+// RENDER
+// ═══════════════════════════════════
+function render(){
+  document.getElementById('content').innerHTML={
+    dashboard:renderDashboard,
+    employees:renderEmployees,
+    attendance:renderAttendance,
+    leave:renderLeave,
+    holidays:renderHolidays,
+    report:renderReport,
+  }[currentTab]();
+}
+
+// ═══════════════════════════════════
+// CALENDAR HELPER
+// ═══════════════════════════════════
+function renderCalendar(yearMonth,forEmpId){
+  const[yy,mm]=yearMonth.split('-').map(Number);
+  const dim=new Date(yy,mm,0).getDate();
+  const first=new Date(yy,mm-1,1).getDay(); // 0=Sun
+  // ISO week: start Monday. Offset = (first+6)%7
+  const offset=(first+6)%7;
+  const cells=[];
+  for(let i=0;i<offset;i++) cells.push({d:0});
+  for(let d=1;d<=dim;d++) cells.push({d});
+  while(cells.length%7!==0) cells.push({d:0});
+
+  const todayYM=today.slice(0,7);
+  const dotColor={normal:'#0a7c4d',late:'#f59e0b',early:'#f59e0b',absent:'#b91c1c',leave:'#1a56db',norecord:'#ddd',holiday:'#f59e0b',weekend:'#e0e0e0'};
+
+  const dayRows=cells.reduce((acc,c,i)=>{if(i%7===0)acc.push([]);acc[acc.length-1].push(c);return acc;},[]);
+
+  let html=`<div class="cal-grid">`;
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach((d,i)=>
+    html+=`<div class="cal-dow${i>=5?' sat':''}${i===6?' sun':''}">${d}</div>`
+  );
+
+  dayRows.forEach(row=>{
+    row.forEach(({d})=>{
+      if(!d){html+=`<div class="cal-day other"></div>`;return;}
+      const dateStr=`${yearMonth}-${String(d).padStart(2,'0')}`;
+      const dt=new Date(yy,mm-1,d);
+      const dow=dt.getDay();
+      const isWknd=dow===0||dow===6;
+      const hol=isHoliday(dateStr);
+      const isToday=dateStr===today;
+      let cls='cal-day';
+      if(isWknd) cls+=' weekend';
+      if(hol) cls+=' holiday-day';
+      if(isToday) cls+=' today';
+
+      let dotsHTML='';
+      const dispEmps=forEmpId?employees.filter(e=>e.id===forEmpId):employees;
+      dispEmps.forEach(emp=>{
+        const st=getDayStatus(emp.id,dateStr);
+        const c=dotColor[st]||'#ddd';
+        const initials=emp.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+        const stLabel=st==='norecord'?'No Record':st==='holiday'?'Public Holiday':st==='weekend'?'Weekend':STATUS[st]||st;
+        const noRec=st==='norecord'||st==='weekend'?'norecord':'';
+        dotsHTML+=`<div class="cal-chip ${noRec}" style="background:${c}" title="${emp.name}: ${stLabel}">${initials}</div>`;
+      });
+
+      html+=`<div class="${cls}">
+        <div class="cal-day-num">${d}</div>
+        ${hol?`<div class="cal-holiday-name">🎌 ${hol.name}</div>`:''}
+        <div class="cal-dots">${dotsHTML}</div>
+      </div>`;
+    });
+  });
+  html+=`</div>`;
+  return html;
+}
+
+// ═══════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════
+function renderDashboard(){
+  const isAdmin=session.role==='admin';
+  const[cy,cm]=calMonth.split('-').map(Number);
+  const prevM=new Date(cy,cm-2,1),nextM=new Date(cy,cm,1);
+  const prevStr=`${prevM.getFullYear()}-${String(prevM.getMonth()+1).padStart(2,'0')}`;
+  const nextStr=`${nextM.getFullYear()}-${String(nextM.getMonth()+1).padStart(2,'0')}`;
+
+  const calHTML=`
+    <div class="cal-wrap">
+      <div class="cal-header">
+        <div class="cal-title">${MONTHS[cm-1]} ${cy}</div>
+        <div class="cal-nav">
+          <button onclick="calMonth='${prevStr}';render()">&#8249; Prev</button>
+          <button onclick="calMonth='${nowMonth}';render()">Today</button>
+          <button onclick="calMonth='${nextStr}';render()">Next &#8250;</button>
+        </div>
+      </div>
+      ${renderCalendar(calMonth, isAdmin?null:session.empId)}
+      <div class="cal-legend">
+        <span><div class="dot" style="background:#0a7c4d"></div> Present</span>
+        <span><div class="dot" style="background:#1a56db"></div> Leave</span>
+        <span><div class="dot" style="background:#b91c1c"></div> Absent</span>
+        <span><div class="dot" style="background:#f59e0b"></div> Late / Holiday</span>
+        <span><div class="dot" style="background:#ddd"></div> No Record</span>
+      </div>
+    </div>`;
+
+  if(!isAdmin){
+    const emp=employees.find(e=>e.id===session.empId);
+    const a=getAtt(emp.id,today);
+    const used=usedLeave(emp.id),rem=emp.annualLeave-used;
+    const stBadge=a&&a.status?badge(STATUS[a.status]||a.status,a.status==='normal'?'success':a.status==='absent'?'danger':'warning'):'<span style="color:#bbb">Not recorded</span>';
+    const myLeaves=[...leaves].filter(l=>l.empId===emp.id).sort((a,b)=>b.id-a.id).slice(0,5);
+    return `
+      <div class="stat-grid">
+        <div class="stat"><div class="stat-lbl">Today's Status</div><div style="margin-top:5px">${stBadge}</div></div>
+        <div class="stat"><div class="stat-lbl">Check In</div><div class="stat-val" style="font-size:17px">${a.checkIn||'—'}</div></div>
+        <div class="stat"><div class="stat-lbl">Leave Balance</div><div class="stat-val" style="color:${remColor(rem,emp.annualLeave)}">${rem}<span style="font-size:12px;color:#aaa">/${emp.annualLeave}d</span></div></div>
+        <div class="stat"><div class="stat-lbl">Pending Requests</div><div class="stat-val" style="color:#b45309">${leaves.filter(l=>l.empId===emp.id&&l.status==='pending').length}</div></div>
+      </div>
+      ${calHTML}
+      <div class="card">
+        <div class="card-title">My Recent Leave Requests</div>
+        <table><thead><tr><th>Type</th><th>Start</th><th>End</th><th>Days</th><th>Status</th></tr></thead>
+        <tbody>${myLeaves.length?myLeaves.map(l=>{const s={approved:{l:'Approved',c:'success'},rejected:{l:'Rejected',c:'danger'},pending:{l:'Pending',c:'warning'}}[l.status];return`<tr><td>${l.type}</td><td>${l.startDate}</td><td>${l.endDate}</td><td>${l.days}</td><td>${badge(s.l,s.c)}</td></tr>`;}).join(''):'<tr><td colspan="5" class="empty">No requests yet</td></tr>'}</tbody></table>
+        <div style="margin-top:12px"><button class="btn btn-primary" onclick="switchTab('leave')">+ Submit Leave Request</button></div>
+      </div>`;
+  }
+
+  // Admin dashboard
+  const present=employees.filter(e=>{const a=getAtt(e.id,today);return a&&a.checkIn;}).length;
+  const pending=leaves.filter(l=>l.status==='pending');
+
+  // Leave status cards
+  const lsCards=employees.map(emp=>{
+    const used=usedLeave(emp.id),rem=emp.annualLeave-used;
+    const rc=remColor(rem,emp.annualLeave);
+    const todaySt=getDayStatus(emp.id,today);
+    const stBadge=todaySt==='holiday'?badge('Holiday','warning'):
+      todaySt==='leave'?badge('On Leave','info'):
+      todaySt==='weekend'?badge('Weekend','gray'):
+      (()=>{const a=getAtt(emp.id,today);return a&&a.checkIn?badge(STATUS[a.status]||'Present','success'):`<span style="font-size:11px;color:#bbb">No Record</span>`;})();
+    const mLeave=leaves.filter(l=>l.empId===emp.id&&l.status==='approved'&&l.startDate.startsWith(calMonth)).reduce((s,l)=>s+(l.type.includes('Half Day')?0.5:l.days),0);
+    return`<div class="lsc">
+      <div class="lsc-name">${emp.name}</div><div class="lsc-pos">${emp.position}</div>
+      <div class="lsc-row"><span style="color:#888">Today</span><span>${stBadge}</span></div>
+      <div class="lsc-row"><span style="color:#888">This month leave</span><span style="color:#1a56db;font-weight:600">${mLeave}d</span></div>
+      <div class="lsc-row"><span style="color:#888">Balance</span><span style="color:${rc};font-weight:600">${rem}/${emp.annualLeave}d</span></div>
+    </div>`;
+  }).join('');
+
+  const pendingHTML=pending.length?`
+    <div class="sec-title">⏳ Pending Leave Requests (${pending.length})</div>
+    ${pending.map(l=>{
+      const emp=employees.find(e=>e.id===l.empId);
+      return`<div class="pcard">
+        <div><strong>${emp?.name}</strong> <span style="margin:0 6px;color:#aaa">|</span>
+        <span style="color:#555">${l.type} · ${l.startDate} → ${l.endDate} (${l.days}d)</span>
+        <span style="color:#aaa;margin-left:6px;font-size:12px">${l.reason}</span></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-success btn-sm" onclick="approveLeave(${l.id},'approved')">✓ Approve</button>
+          <button class="btn btn-danger btn-sm" onclick="approveLeave(${l.id},'rejected')">✗ Reject</button>
+        </div>
+      </div>`;
+    }).join('')}`:'';
+
+  return`
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-lbl">Present Today</div><div class="stat-val" style="color:#0a7c4d">${present}<span style="font-size:13px;color:#aaa">/${employees.length}</span></div></div>
+      <div class="stat"><div class="stat-lbl">Pending Approvals</div><div class="stat-val" style="color:#b45309">${pending.length}</div></div>
+      <div class="stat"><div class="stat-lbl">Public Holidays</div><div class="stat-val" style="color:#b45309">${holidays.filter(h=>h.date.startsWith(calMonth)).length}</div></div>
+      <div class="stat"><div class="stat-lbl">Total Employees</div><div class="stat-val" style="color:#1a56db">${employees.length}</div></div>
+    </div>
+    <div class="sec-title">Employee Leave Status</div>
+    <div class="leave-status-grid">${lsCards}</div>
+    ${calHTML}
+    ${pendingHTML}`;
+}
+
+// ═══════════════════════════════════
+// EMPLOYEES (Admin)
+// ═══════════════════════════════════
+function renderEmployees(){
+  const cards=employees.map(emp=>{
+    const used=usedLeave(emp.id),rem=emp.annualLeave-used,rc=remColor(rem,emp.annualLeave);
+    const pct=Math.min(100,Math.round(used/emp.annualLeave*100));
+    return`<div class="emp-card">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="avatar">${emp.name.split(' ').map(w=>w[0]).join('').slice(0,2)}</div>
+        <div>
+          <div style="font-weight:700">${emp.name}</div>
+          <div style="font-size:12px;color:#888">${emp.position}</div>
+          <div style="font-size:11px;color:#aaa;margin-top:1px">Login: <strong>${emp.username}</strong> · Joined: ${emp.joinDate||'—'}</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="text-align:right">
+          <div style="font-size:11px;color:#888">Leave Balance</div>
+          <div style="font-size:17px;font-weight:700;color:${rc}">${rem}<span style="font-size:11px;color:#aaa">/${emp.annualLeave}d</span></div>
+          <div class="lp" style="width:75px"><div class="lpb" style="width:${pct}%;background:${rc}"></div></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="btn btn-sm" onclick="openEmpForm(${emp.id})">✏️ Edit</button>
+          <button class="btn btn-sm" style="color:#1a56db;border-color:#c3d3f9;background:#f0f4ff" onclick="openPwdForm(${emp.id})">🔑 Pwd</button>
+          <button class="btn btn-sm btn-danger" onclick="delEmp(${emp.id})">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  return`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:16px;font-weight:700">Employee Management</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="openAdminPwd()">🔒 Admin Password</button>
+        <button class="btn btn-primary" onclick="openEmpForm(null)">+ Add Employee</button>
+      </div>
+    </div>
+    <div id="efArea"></div>${cards}`;
+}
+function openEmpForm(id){
+  const e=id?employees.find(x=>x.id===id):null;
+  document.getElementById('efArea').innerHTML=`
+    <div class="fpanel">
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px">${e?'Edit Employee':'Add Employee'}</div>
+      <div class="fgrid">
+        <div class="fg"><label>Full Name *</label><input id="efN" value="${e?.name||''}" placeholder="John Smith"></div>
+        <div class="fg"><label>Position *</label><input id="efP" value="${e?.position||''}" placeholder="Manager"></div>
+        <div class="fg"><label>Username *</label><input id="efU" value="${e?.username||''}" placeholder="john.smith"></div>
+        <div class="fg"><label>Password ${e?'(blank=keep)':' *'}</label><input id="efPw" type="password" placeholder="${e?'Leave blank to keep':'Set password'}"></div>
+        <div class="fg"><label>Annual Leave (days)</label><input id="efL" type="number" value="${e?.annualLeave||15}"></div>
+        <div class="fg"><label>Join Date</label><input id="efJ" type="date" value="${e?.joinDate||today}"></div>
+      </div>
+      <div class="faction">
+        <button class="btn" onclick="document.getElementById('efArea').innerHTML=''">Cancel</button>
+        <button class="btn btn-primary" onclick="saveEmp(${id||'null'})">Save</button>
+      </div>
+    </div>`;
+}
+function saveEmp(id){
+  const n=document.getElementById('efN').value.trim(),p=document.getElementById('efP').value.trim(),u=document.getElementById('efU').value.trim();
+  const pw=document.getElementById('efPw').value,al=parseInt(document.getElementById('efL').value)||15,jd=document.getElementById('efJ').value;
+  if(!n||!p||!u)return alert('Name, position and username are required.');
+  if(id)employees=employees.map(e=>e.id===id?{...e,name:n,position:p,username:u,annualLeave:al,joinDate:jd,...(pw?{password:pw}:{})}:e);
+  else{if(!pw)return alert('Password required for new employee.');employees.push({id:Date.now(),name:n,position:p,username:u,password:pw,annualLeave:al,joinDate:jd});}
+  save();buildLoginSel();render();
+}
+function delEmp(id){const e=employees.find(x=>x.id===id);if(confirm(`Delete "${e.name}"?`)){employees=employees.filter(x=>x.id!==id);save();render();}}
+function openPwdForm(id){
+  const e=employees.find(x=>x.id===id);
+  document.getElementById('efArea').innerHTML=`
+    <div class="fpanel" style="border-color:#c3d3f9;background:#f0f4ff">
+      <div style="font-size:14px;font-weight:700;margin-bottom:4px">🔑 Set Password — ${e.name}</div>
+      <div style="font-size:12px;color:#555;margin-bottom:10px">Share the new password with the employee directly.</div>
+      <div class="fgrid">
+        <div class="fg"><label>New Password *</label><input id="pw1" type="password" placeholder="New password"></div>
+        <div class="fg"><label>Confirm *</label><input id="pw2" type="password" placeholder="Repeat"></div>
+      </div>
+      <div class="err-msg" id="pwErr"></div>
+      <div class="faction">
+        <button class="btn" onclick="document.getElementById('efArea').innerHTML=''">Cancel</button>
+        <button class="btn btn-primary" onclick="savePwd(${id})">Save</button>
+      </div>
+    </div>`;
+}
+function savePwd(id){
+  const p1=document.getElementById('pw1').value,p2=document.getElementById('pw2').value,err=document.getElementById('pwErr');
+  if(!p1){err.textContent='Enter a password.';return;}
+  if(p1.length<4){err.textContent='Min 4 characters.';return;}
+  if(p1!==p2){err.textContent='Passwords do not match.';return;}
+  employees=employees.map(e=>e.id===id?{...e,password:p1}:e);save();
+  document.getElementById('efArea').innerHTML=`<div class="ok-msg">✓ Password updated for <strong>${employees.find(e=>e.id===id)?.name}</strong>.</div>`;
+  setTimeout(()=>{const el=document.getElementById('efArea');if(el)el.innerHTML='';},3000);
+}
+function openAdminPwd(){
+  document.getElementById('efArea').innerHTML=`
+    <div class="fpanel">
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px">🔒 Change Admin Password</div>
+      <div class="fgrid">
+        <div class="fg full"><label>Current Password *</label><input id="aC" type="password" style="max-width:260px" placeholder="Current"></div>
+        <div class="fg"><label>New Password *</label><input id="aP1" type="password" placeholder="New"></div>
+        <div class="fg"><label>Confirm *</label><input id="aP2" type="password" placeholder="Repeat"></div>
+      </div>
+      <div class="err-msg" id="aErr"></div>
+      <div class="faction">
+        <button class="btn" onclick="document.getElementById('efArea').innerHTML=''">Cancel</button>
+        <button class="btn btn-primary" onclick="saveAdminPwd()">Save</button>
+      </div>
+    </div>`;
+}
+function saveAdminPwd(){
+  const cur=document.getElementById('aC').value,p1=document.getElementById('aP1').value,p2=document.getElementById('aP2').value,err=document.getElementById('aErr');
+  const stored=localStorage.getItem('hr_adminpass')||'admin123';
+  if(cur!==stored){err.textContent='Current password incorrect.';return;}
+  if(!p1||p1.length<4){err.textContent='Min 4 characters.';return;}
+  if(p1!==p2){err.textContent='Passwords do not match.';return;}
+  localStorage.setItem('hr_adminpass',p1);
+  document.getElementById('efArea').innerHTML=`<div class="ok-msg">✓ Admin password updated.</div>`;
+  setTimeout(()=>{const el=document.getElementById('efArea');if(el)el.innerHTML='';},2500);
+}
+
+// ═══════════════════════════════════
+// ATTENDANCE (Admin)
+// ═══════════════════════════════════
+function renderAttendance(){
+  const rows=employees.map(emp=>{
+    const a=getAtt(emp.id,attDate);
+    const opts=`<option value="">—</option>${Object.entries(STATUS).map(([k,v])=>`<option value="${k}"${a.status===k?' selected':''}>${v}</option>`).join('')}`;
+    return`<tr>
+      <td><strong>${emp.name}</strong></td><td style="color:#888;font-size:12px">${emp.position}</td>
+      <td><input class="ai" type="time" value="${a.checkIn||''}" style="width:92px" onchange="updateAtt(${emp.id},'${attDate}',{checkIn:this.value,status:document.querySelector('[data-e=\\'${emp.id}\\']')?.value||'normal'})"></td>
+      <td><input class="ai" type="time" value="${a.checkOut||''}" style="width:92px" onchange="updateAtt(${emp.id},'${attDate}',{checkOut:this.value})"></td>
+      <td><select class="ai" data-e="${emp.id}" style="width:108px" onchange="updateAtt(${emp.id},'${attDate}',{status:this.value})">${opts}</select></td>
+      <td><input class="ai" value="${a.note||''}" placeholder="Note" style="width:120px" onchange="updateAtt(${emp.id},'${attDate}',{note:this.value})"></td>
+    </tr>`;
+  }).join('');
+  const sumRows=employees.map(emp=>{
+    const recs=attendance.filter(a=>a.empId===emp.id&&a.date.startsWith(selectedMonth));
+    const c={normal:0,late:0,early:0,absent:0,leave:0};
+    recs.forEach(a=>{if(c[a.status]!==undefined)c[a.status]++;});
+    return`<tr><td><strong>${emp.name}</strong></td>
+      <td style="color:#0a7c4d;font-weight:600">${c.normal}</td>
+      <td style="color:${c.late>0?'#b45309':'#ccc'}">${c.late}</td>
+      <td style="color:${c.early>0?'#b45309':'#ccc'}">${c.early}</td>
+      <td style="color:${c.absent>0?'#b91c1c':'#ccc'}">${c.absent}</td>
+      <td style="color:#1a56db">${c.leave}</td>
+      <td>${recs.length}</td></tr>`;
+  }).join('');
+  return`
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:15px;font-weight:700">Daily Log</div>
+        <input type="date" value="${attDate}" onchange="attDate=this.value;render()">
+      </div>
+      <div style="overflow:auto"><table>
+        <thead><tr><th>Name</th><th>Position</th><th>Check In</th><th>Check Out</th><th>Status</th><th>Note</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="font-size:15px;font-weight:700">Monthly Summary</div>
+        <input type="month" value="${selectedMonth}" onchange="selectedMonth=this.value;render()">
+      </div>
+      <div style="overflow:auto"><table>
+        <thead><tr><th>Name</th><th>Present</th><th>Late</th><th>Left Early</th><th>Absent</th><th>On Leave</th><th>Total Records</th></tr></thead>
+        <tbody>${sumRows}</tbody>
+      </table></div>
+    </div>`;
+}
+
+// ═══════════════════════════════════
+// LEAVE
+// ═══════════════════════════════════
+function renderLeave(){
+  const isAdmin=session.role==='admin';
+  const myEmpId=isAdmin?null:session.empId;
+  const dispEmps=isAdmin?employees:employees.filter(e=>e.id===myEmpId);
+
+  const balCards=dispEmps.map(emp=>{
+    const used=usedLeave(emp.id),rem=emp.annualLeave-used,rc=remColor(rem,emp.annualLeave);
+    const pct=Math.min(100,Math.round(used/emp.annualLeave*100));
+    return`<div style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:10px;padding:12px;min-width:150px">
+      <div style="font-size:13px;font-weight:700">${emp.name}</div>
+      <div style="font-size:11px;color:#888;margin-bottom:7px">${emp.position}</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px"><span style="color:#888">Used</span><span style="color:#b45309;font-weight:600">${used}d</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#888">Remaining</span><span style="color:${rc};font-weight:700">${rem}/${emp.annualLeave}d</span></div>
+      <div class="lp"><div class="lpb" style="width:${pct}%;background:${rc}"></div></div>
+    </div>`;
+  }).join('');
+
+  const formHTML=showLvForm?`
+    <div class="fpanel">
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px">New Leave Request</div>
+      ${isAdmin?`<div class="fg" style="margin-bottom:10px"><label>Employee</label><select id="lfE">${employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join('')}</select></div>`:''}
+      <div class="fgrid">
+        <div class="fg"><label>Type</label><select id="lfT">${LEAVE_TYPES.map(t=>`<option>${t}</option>`).join('')}</select></div>
+        <div class="fg"></div>
+        <div class="fg"><label>Start Date</label><input id="lfS" type="date" value="${today}"></div>
+        <div class="fg"><label>End Date</label><input id="lfE2" type="date" value="${today}"></div>
+        <div class="fg full"><label>Reason *</label><input id="lfR" placeholder="Reason for leave"></div>
+      </div>
+      <div class="faction">
+        <button class="btn" onclick="showLvForm=false;render()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitLeave()">Submit</button>
+      </div>
+    </div>`:'';
+
+  const dispLeaves=isAdmin?leaves:leaves.filter(l=>l.empId===myEmpId);
+  const lvRows=[...dispLeaves].sort((a,b)=>b.id-a.id).map(l=>{
+    const emp=employees.find(e=>e.id===l.empId);
+    const s={approved:{l:'Approved',c:'success'},rejected:{l:'Rejected',c:'danger'},pending:{l:'Pending',c:'warning'}}[l.status]||{l:'Pending',c:'warning'};
+    const isEditing=editLvId===l.id;
+    if(isEditing){
+      return`<div style="background:#f0f4ff;border:1px solid #c3d3f9;border-radius:10px;padding:14px;margin-bottom:7px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:#1a56db">✏️ Edit Leave Request — ${emp?.name}</div>
+        <div class="fgrid">
+          <div class="fg"><label>Employee</label>
+            <select id="elE">${employees.map(e=>`<option value="${e.id}"${e.id===l.empId?' selected':''}>${e.name}</option>`).join('')}</select></div>
+          <div class="fg"><label>Status</label>
+            <select id="elSt">
+              <option value="pending"${l.status==='pending'?' selected':''}>Pending</option>
+              <option value="approved"${l.status==='approved'?' selected':''}>Approved</option>
+              <option value="rejected"${l.status==='rejected'?' selected':''}>Rejected</option>
+            </select></div>
+          <div class="fg"><label>Leave Type</label>
+            <select id="elT">${LEAVE_TYPES.map(t=>`<option${t===l.type?' selected':''}>${t}</option>`).join('')}</select></div>
+          <div class="fg"></div>
+          <div class="fg"><label>Start Date</label><input id="elS" type="date" value="${l.startDate}"></div>
+          <div class="fg"><label>End Date</label><input id="elE2" type="date" value="${l.endDate}"></div>
+          <div class="fg full"><label>Reason</label><input id="elR" value="${l.reason}"></div>
+        </div>
+        <div class="faction">
+          <button class="btn btn-danger btn-sm" onclick="deleteLeave(${l.id})">🗑️ Delete</button>
+          <div style="flex:1"></div>
+          <button class="btn" onclick="editLvId=null;render()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveEditLeave(${l.id})">Save Changes</button>
+        </div>
+      </div>`;
+    }
+    return`<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:11px 14px;margin-bottom:7px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <div>
+          ${isAdmin?`<strong style="margin-right:7px">${emp?.name}</strong>`:''}
+          <span style="font-weight:600">${l.type}</span>
+          <span style="color:#aaa;margin:0 5px">·</span>
+          <span style="color:#555">${l.startDate} → ${l.endDate} (${l.days}d)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          ${badge(s.l,s.c)}
+          ${isAdmin&&l.status==='pending'?`<button class="btn btn-success btn-sm" onclick="approveLeave(${l.id},'approved')">✓ Approve</button><button class="btn btn-danger btn-sm" onclick="approveLeave(${l.id},'rejected')">✗ Reject</button>`:''}
+          ${isAdmin?`<button class="btn btn-sm" style="color:#1a56db;border-color:#c3d3f9;background:#f0f4ff" onclick="editLvId=${l.id};render()">✏️ Edit</button>`:''}
+          ${!isAdmin&&l.status==='pending'?`<button class="btn btn-danger btn-sm" onclick="cancelLeave(${l.id})">✗ Cancel</button>`:''}
+        </div>
+      </div>
+      <div style="font-size:12px;color:#aaa;margin-top:4px">${l.reason}</div>
+    </div>`;
+  }).join('');
+
+  return`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:16px;font-weight:700">Leave Management</div>
+      <button class="btn btn-primary" onclick="showLvForm=true;editLvId=null;render()">+ Request Leave</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px">${balCards}</div>
+    ${formHTML}
+    <div class="sec-title">Leave Requests</div>
+    ${dispLeaves.length?lvRows:'<div class="empty">No leave requests</div>'}`;
+}
+function submitLeave(){
+  const isAdmin=session.role==='admin';
+  const empId=isAdmin?parseInt(document.getElementById('lfE').value):session.empId;
+  const type=document.getElementById('lfT').value;
+  const start=document.getElementById('lfS').value;
+  const end=document.getElementById('lfE2').value;
+  const reason=document.getElementById('lfR').value.trim();
+  if(!reason)return alert('Please provide a reason.');
+  const days=type.includes('Half Day')?0.5:Math.max(1,Math.round((new Date(end)-new Date(start))/86400000)+1);
+  leaves.push({id:Date.now(),empId,type,startDate:start,endDate:end,reason,days,status:'pending'});
+  save();showLvForm=false;render();
+}
+function saveEditLeave(id){
+  const empId=parseInt(document.getElementById('elE').value);
+  const type=document.getElementById('elT').value;
+  const start=document.getElementById('elS').value;
+  const end=document.getElementById('elE2').value;
+  const reason=document.getElementById('elR').value.trim();
+  const status=document.getElementById('elSt').value;
+  if(!reason)return alert('Please provide a reason.');
+  const days=type.includes('Half Day')?0.5:Math.max(1,Math.round((new Date(end)-new Date(start))/86400000)+1);
+  leaves=leaves.map(l=>l.id===id?{...l,empId,type,startDate:start,endDate:end,reason,days,status}:l);
+  save();editLvId=null;render();
+}
+function deleteLeave(id){
+  if(confirm('Permanently delete this leave request?')){leaves=leaves.filter(l=>l.id!==id);save();editLvId=null;render();}
+}
+function cancelLeave(id){if(confirm('Cancel this request?')){leaves=leaves.filter(l=>l.id!==id);save();render();}}
+
+// ═══════════════════════════════════
+// HOLIDAYS (Admin)
+// ═══════════════════════════════════
+function renderHolidays(){
+  const formHTML=showHolForm?`
+    <div class="fpanel">
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px">Add Public Holiday</div>
+      <div class="fgrid">
+        <div class="fg"><label>Date *</label><input id="hDate" type="date" value="${today}"></div>
+        <div class="fg"><label>Holiday Name *</label><input id="hName" placeholder="e.g. Constitution Day"></div>
+      </div>
+      <div class="faction">
+        <button class="btn" onclick="showHolForm=false;render()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveHoliday()">Add Holiday</button>
+      </div>
+    </div>`:'';
+
+  const sorted=[...holidays].sort((a,b)=>a.date.localeCompare(b.date));
+  const rows=sorted.length?sorted.map((h,i)=>`
+    <tr>
+      <td>${h.date}</td>
+      <td>${DOW[new Date(h.date+'T12:00:00').getDay()]}</td>
+      <td><strong>${h.name}</strong></td>
+      <td><button class="btn btn-danger btn-sm" onclick="delHoliday(${h.id})">🗑️ Remove</button></td>
+    </tr>`).join(''):`<tr><td colspan="4" class="empty">No public holidays added</td></tr>`;
+
+  return`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:16px;font-weight:700">Public Holidays</div>
+      <button class="btn btn-primary" onclick="showHolForm=true;render()">+ Add Holiday</button>
+    </div>
+    <div style="font-size:13px;color:#666;margin-bottom:14px">
+      Public holidays appear on the calendar 🎌, mark the <em>Sunday &amp; Holidays</em> column as 8 hours, and print the holiday name in the <em>Notes</em> column in the Monthly Report Excel.
+    </div>
+    ${formHTML}
+    <div class="card">
+      <table>
+        <thead><tr><th>Date</th><th>Day</th><th>Name</th><th style="width:110px">Action</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+function saveHoliday(){
+  const date=document.getElementById('hDate').value;
+  const name=document.getElementById('hName').value.trim();
+  if(!date||!name)return alert('Date and name required.');
+  if(holidays.find(h=>h.date===date))return alert('A holiday already exists on this date.');
+  holidays.push({id:Date.now(),date,name});
+  save();showHolForm=false;render();
+}
+function delHoliday(id){if(confirm('Remove this holiday?')){holidays=holidays.filter(h=>h.id!==id);save();render();}}
+
+// ═══════════════════════════════════
+// MONTHLY REPORT (Admin)
+// ═══════════════════════════════════
+function renderReport(){
+  const[yy,mm]=selectedMonth.split('-').map(Number);
+  const dim=new Date(yy,mm,0).getDate();
+  const days=Array.from({length:dim},(_,i)=>i+1);
+
+  const sumRows=employees.map(emp=>{
+    const recs=attendance.filter(a=>a.empId===emp.id&&a.date.startsWith(selectedMonth));
+    const c={normal:0,late:0,early:0,absent:0,leave:0};
+    recs.forEach(a=>{if(c[a.status]!==undefined)c[a.status]++;});
+    const leaveDays=leaves.filter(l=>l.empId===emp.id&&l.status==='approved'&&l.startDate.slice(0,7)===selectedMonth).reduce((s,l)=>s+(l.type.includes('Half Day')?0.5:l.days),0);
+    const used=usedLeave(emp.id),rem=emp.annualLeave-used,rc=remColor(rem,emp.annualLeave);
+    const totalH=recs.filter(a=>a.checkIn&&a.checkOut).reduce((s,a)=>s+calcHours(a.checkIn,a.checkOut),0)||recs.filter(a=>a.status==='normal').length*8;
+    return`<tr>
+      <td><strong>${emp.name}</strong></td>
+      <td style="font-size:12px;color:#888">${emp.position}</td>
+      <td>${recs.length}</td>
+      <td style="color:#0a7c4d;font-weight:600">${c.normal}</td>
+      <td style="color:${c.late>0?'#b45309':'#ccc'}">${c.late}</td>
+      <td style="color:${c.absent>0?'#b91c1c':'#ccc'}">${c.absent}</td>
+      <td style="color:#1a56db">${leaveDays}d</td>
+      <td style="font-weight:600">${Math.round(totalH)}h</td>
+      <td style="color:${rc};font-weight:700">${rem}d</td>
+    </tr>`;
+  }).join('');
+
+  const dayHdrs=days.map(d=>{const dt=new Date(yy,mm-1,d),iWk=dt.getDay()===0||dt.getDay()===6;return`<th style="min-width:22px;text-align:center;color:${iWk?'#e53e3e':'#888'};padding:6px 2px;font-size:10px">${d}</th>`;}).join('');
+  const dayRows=employees.map(emp=>
+    `<tr><td style="font-weight:700;padding:6px 12px;white-space:nowrap;font-size:12px">${emp.name}</td>`+
+    days.map(d=>{
+      const dt=new Date(yy,mm-1,d),iWk=dt.getDay()===0||dt.getDay()===6;
+      const ds=`${selectedMonth}-${String(d).padStart(2,'0')}`;
+      const hol=isHoliday(ds);
+      const lv=isLeaveDay(emp.id,ds);
+      const a=attendance.find(x=>x.empId===emp.id&&x.date===ds);
+      const sym=iWk?'':hol?'🎌':lv?'V':(a?STATUS_ABBR[a.status]||'●':'');
+      const clr=iWk?'#ccc':hol?'#b45309':lv?'#1a56db':a?CLR[a.status]:'#ddd';
+      return`<td style="text-align:center;padding:4px 1px;background:${iWk?'#fafafa':hol?'#fff8e1':'transparent'};color:${clr};font-weight:700;font-size:11px">${sym}</td>`;
+    }).join('')+'</tr>'
+  ).join('');
+
+  return`
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:16px;font-weight:700">Monthly Report</div>
+        <input type="month" value="${selectedMonth}" onchange="selectedMonth=this.value;render()">
+      </div>
+      <button class="btn btn-primary" onclick="exportExcel()">📥 Export Excel (.xlsx)</button>
+    </div>
+    <div style="font-size:12px;color:#666;margin-bottom:14px">
+      Exports one sheet per employee matching your template format — start/end times, total hours, Holiday (8h for leave days), Sunday &amp; Holidays (8h for public holidays), Notes (holiday name).
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">Summary</div>
+      <div style="overflow:auto"><table>
+        <thead><tr><th>Name</th><th>Position</th><th>Records</th><th>Present</th><th>Late</th><th>Absent</th><th>Leave</th><th>Work Hours</th><th>Leave Balance</th></tr></thead>
+        <tbody>${sumRows}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Daily Attendance Preview</div>
+      <div style="overflow:auto"><table style="font-size:11px">
+        <thead><tr><th style="min-width:110px;padding:6px 12px">Name</th>${dayHdrs}</tr></thead>
+        <tbody>${dayRows}</tbody>
+      </table></div>
+      <div style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#666">
+        ${[['●','Present','#0a7c4d'],['L','Late','#b45309'],['A','Absent','#b91c1c'],['V','Leave','#1a56db'],['🎌','Holiday','#b45309']].map(([s,l,c])=>`<span><span style="color:${c};font-weight:700">${s}</span> ${l}</span>`).join('')}
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════
+// EXCEL EXPORT — matching template
+// ═══════════════════════════════════
+function exportExcel(){
+  const[yy,mm]=selectedMonth.split('-').map(Number);
+  const dim=new Date(yy,mm,0).getDate();
+  const monthName=MONTHS[mm-1];
+  const wb=XLSX.utils.book_new();
+
+  employees.forEach(emp=>{
+    // Calculate total working hours for header
+    let totalWorkH=0;
+    for(let d=1;d<=dim;d++){
+      const ds=`${selectedMonth}-${String(d).padStart(2,'0')}`;
+      const dt=new Date(yy,mm-1,d),dow=dt.getDay();
+      if(dow===0||dow===6) continue;
+      if(isHoliday(ds)) continue;
+      if(isLeaveDay(emp.id,ds)){totalWorkH+=8;continue;}
+      const a=getAtt(emp.id,ds);
+      if(a.checkIn&&a.checkOut) totalWorkH+=calcHours(a.checkIn,a.checkOut);
+      else if(a.status&&a.status!=='absent') totalWorkH+=8;
+    }
+
+    const wsData=[];
+    // Row 1
+    wsData.push(['Year',yy,'','Month',monthName,'','Surname/Name','',emp.name,'','','Position',emp.position,'','Working time','',Math.round(totalWorkH)]);
+    // Row 2
+    wsData.push(['Days','','Working time','','','Time worked in hours','','','','Time of absence from work in days or hours','','','','','','','Notes']);
+    // Row 3 headers
+    wsData.push(['Day','Day of the week','Start time','End time','Total hours','Sunday and holidays','Non-working days','Nights','Overhours','Holiday','Holiday (on request)','Special leave','Unpaid leave','Child care','Sickness absence','Other.....','Notes']);
+
+    // Data rows
+    for(let d=1;d<=dim;d++){
+      const ds=`${selectedMonth}-${String(d).padStart(2,'0')}`;
+      const dt=new Date(yy,mm-1,d),dow=dt.getDay();
+      const serial=excelSerial(ds);
+      const dayName=DOW[dow];
+      const hol=isHoliday(ds);
+      const lv=isLeaveDay(emp.id,ds);
+      const a=getAtt(emp.id,ds);
+
+      let row=new Array(17).fill('');
+      row[0]=serial; row[1]=dayName;
+
+      if(dow===0){
+        // Sunday
+        row[5]=8; // Sunday and holidays
+      } else if(dow===6){
+        // Saturday
+        row[6]=8; // Non-working days
+      } else if(hol){
+        // Public holiday (weekday)
+        row[2]=8/24; row[3]=17/24; // start 08:00, end 17:00
+        // row[4] = blank (no total hours)
+        row[5]=8; // Sunday and holidays
+        row[16]=hol.name; // Notes
+      } else if(lv){
+        // Approved leave day
+        const isHalf=lv.type.includes('Half Day');
+        row[2]=8/24; row[3]=isHalf?13/24:17/24;
+        // row[4] = blank
+        row[9]=isHalf?4:8; // Holiday column
+        row[16]=lv.type; // Notes
+      } else if(a.checkIn){
+        // Normal working day
+        row[2]=timeToFrac(a.checkIn);
+        row[3]=timeToFrac(a.checkOut)||17/24;
+        row[4]=calcHours(a.checkIn,a.checkOut||'17:00');
+      } else if(a.status==='absent'){
+        // Absent — blank row
+      } else {
+        // Default working day (no record)
+        row[2]=8/24; row[3]=17/24; row[4]=8;
+      }
+      wsData.push(row);
+    }
+
+    // Totals row
+    const dataStart=4,dataEnd=3+dim;
+    const sumRow=['','','','Total',
+      {f:`SUM(E${dataStart}:E${dataEnd})`},
+      {f:`SUM(F${dataStart}:F${dataEnd})`},
+      {f:`SUM(G${dataStart}:G${dataEnd})`},
+      {f:`SUM(H${dataStart}:H${dataEnd})`},
+      {f:`SUM(I${dataStart}:I${dataEnd})`},
+      {f:`SUM(J${dataStart}:J${dataEnd})`},
+      {f:`SUM(K${dataStart}:K${dataEnd})`},
+      {f:`SUM(L${dataStart}:L${dataEnd})`},
+      {f:`SUM(M${dataStart}:M${dataEnd})`},
+      {f:`SUM(N${dataStart}:N${dataEnd})`},
+      {f:`SUM(O${dataStart}:O${dataEnd})`},
+      {f:`SUM(P${dataStart}:P${dataEnd})`},
+      '',
+    ];
+    wsData.push(sumRow);
+
+    // Signature row
+    wsData.push(["Employee's signature…....................................",
+      '','','','','','','','','','','','','','','',
+      {f:`SUM(E${dataStart}:P${dataEnd})`}
+    ]);
+
+    const ws=XLSX.utils.aoa_to_sheet(wsData);
+
+    // Row 2 merges to match template structure
+    ws['!merges']=[
+      {s:{r:1,c:0},e:{r:1,c:1}},   // Days (A2:B2)
+      {s:{r:1,c:2},e:{r:1,c:4}},   // Working time (C2:E2)
+      {s:{r:1,c:5},e:{r:1,c:8}},   // Time worked (F2:I2)
+      {s:{r:1,c:9},e:{r:1,c:15}},  // Time of absence (J2:P2)
+    ];
+
+    // Number format: time columns (C, D) → hh:mm
+    for(let r=3;r<3+dim;r++){
+      ['C','D'].forEach(col=>{
+        const ref=col+String(r+1);
+        if(ws[ref]&&typeof ws[ref].v==='number'){
+          ws[ref].t='n'; ws[ref].z='hh:mm';
+        }
+      });
+    }
+
+    // Column widths
+    ws['!cols']=[
+      {wch:6},{wch:8},{wch:10},{wch:10},{wch:10},
+      {wch:14},{wch:14},{wch:8},{wch:9},
+      {wch:9},{wch:16},{wch:12},{wch:12},{wch:10},{wch:14},{wch:10},{wch:18}
+    ];
+
+    // Sheet name from username (uppercase, first 8 chars, no dots)
+    const sheetName=(emp.username||emp.name).replace(/\./g,'').toUpperCase().slice(0,8);
+    XLSX.utils.book_append_sheet(wb,ws,sheetName||emp.name.slice(0,8));
+  });
+
+  XLSX.writeFile(wb,`Attendance_${selectedMonth}.xlsx`);
+}
+
+// ═══════════════════════════════════
+// INIT
+// ═══════════════════════════════════
+// Pre-load some Polish public holidays for May 2026 as demo
+if(!localStorage.getItem('hr_hol')){
+  holidays=[
+    {id:1,date:'2026-05-01',name:'Labour Day'},
+    {id:2,date:'2026-05-03',name:'Constitution Day'},
+  ];
+  save();
+}
+</script>
+</body>
+</html>
