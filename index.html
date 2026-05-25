@@ -1378,7 +1378,7 @@ async function connectFirebase(){
   const err=document.getElementById('fbErr');
   err.style.color='#555'; err.textContent='';
   if(!url){err.style.color='#b91c1c';err.textContent='Please enter your Firebase URL.';return;}
-  if(!url.startsWith('https://')||!url.includes('firebaseio.com')){err.style.color='#b91c1c';err.textContent='URL must be like: https://your-app-default-rtdb.firebaseio.com';return;}
+  if(!url.startsWith('https://')||(!url.includes('firebaseio.com')&&!url.includes('firebasedatabase.app'))){err.style.color='#b91c1c';err.textContent='URL must be like: https://your-app-default-rtdb.firebaseio.com or https://your-app-default-rtdb.europe-west1.firebasedatabase.app';return;}
   err.textContent='Testing connection…';
   try{
     const r=await fetch(`${url}/hrdata.json`,{method:'PUT',headers:{'Content-Type':'application/json'},
