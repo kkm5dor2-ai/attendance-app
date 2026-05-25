@@ -1385,6 +1385,10 @@ async function connectFirebase(){
       body:JSON.stringify({employees,attendance,leaves,holidays,adminpass:localStorage.getItem('hr_adminpass')||'admin123'})});
     if(!r.ok) throw new Error('HTTP '+r.status);
     FIREBASE_URL=url; localStorage.setItem('hr_fburl',url);
+    // MS 설정 초기화 — Firebase 우선 사용
+    MS_CLIENT_ID=''; MS_TENANT_ID='common'; MS_SHARE_URL='';
+    localStorage.removeItem('ms_clientid'); localStorage.removeItem('ms_tenantid'); localStorage.removeItem('ms_shareurl');
+    msalApp=null; _msDriveId=null; _msItemId=null;
     setSyncStatus('ok');
     err.style.color='#0a7c4d';
     err.textContent='✓ Connected! Share this HTML file with your team.';
@@ -1401,28 +1405,11 @@ function disconnectFirebase(){
 // INIT
 // ═══════════════════════════════════
 (async function init(){
+  // Firebase가 하드코딩되어 있으면 MS 설정 강제 초기화
+  if(FIREBASE_URL && FIREBASE_URL !== ''){
+    MS_CLIENT_ID=''; MS_TENANT_ID='common'; MS_SHARE_URL='';
+    localStorage.removeItem('ms_clientid'); localStorage.removeItem('ms_tenantid'); localStorage.removeItem('ms_shareurl');
+  }
   // Polish holidays on first run
   if(!localStorage.getItem('hr_hol')){
-    holidays=[{id:1,date:'2026-05-01',name:'Labour Day'},{id:2,date:'2026-05-03',name:'Constitution Day'}];
-    save();
-  }
-  // Show MS login button if configured
-  showMsLoginBtn();
-  // Try silent MS Graph load first
-  if(MS_CLIENT_ID && MS_SHARE_URL){
-    initMsal();
-    if(msalApp && msalApp.getAllAccounts().length>0){
-      await loadFromGraph();
-    } else {
-      setSyncStatus('local');
-    }
-  } else if(FIREBASE_URL){
-    await loadFromFirebase();
-  } else {
-    setSyncStatus('local');
-  }
-  buildLoginSel();
-})();
-</script>
-</body>
-</html>
+    holidays=[
