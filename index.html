@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Attendance Management System</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f6fa;color:#1a1a2e;font-size:14px}
@@ -135,6 +136,14 @@
     </div>
     <button class="login-btn" onclick="doLogin()">Sign In</button>
     <div class="login-err" id="loginErr"></div>
+    <div id="msDivider" style="display:none;text-align:center;margin:14px 0;color:#aaa;font-size:12px;position:relative">
+      <span style="background:#fff;padding:0 10px;position:relative;z-index:1">or</span>
+      <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:#eee;z-index:0"></div>
+    </div>
+    <button id="msSyncBtn" onclick="msSyncAndLoad()" style="display:none;width:100%;padding:11px;background:#fff;border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit;display:none;align-items:center;justify-content:center;gap:8px">
+      <img src="https://learn.microsoft.com/favicon.ico" width="16" height="16" onerror="this.style.display='none'">
+      Load data from Microsoft 365
+    </button>
     <div class="login-foot">Forgot your password? Contact your administrator.</div>
   </div>
 </div>
@@ -150,6 +159,7 @@
         <div class="u-av" id="hAv">?</div>
         <div><div class="u-name" id="hName">—</div><div class="u-role" id="hRole">—</div></div>
       </div>
+      <div id="syncBadge" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:#f3f4f6;color:#6b7280">💾 Local only</div>
       <button class="logout-btn" onclick="logout()">Sign Out</button>
     </div>
   </div>
@@ -161,23 +171,199 @@
 
 <script>
 // ═══════════════════════════════════
+// MICROSOFT 365 CONFIG
+// ═══════════════════════════════════
+let MS_CLIENT_ID  = localStorage.getItem('ms_clientid')  || '';
+let MS_TENANT_ID  = localStorage.getItem('ms_tenantid')  || 'common';
+let MS_SHARE_URL  = localStorage.getItem('ms_shareurl')  || '';
+let msalApp = null;
+let _msDriveId = null, _msItemId = null;
+
+function initMsal(){
+  if(!MS_CLIENT_ID || msalApp) return;
+  msalApp = new msal.PublicClientApplication({
+    auth:{
+      clientId: MS_CLIENT_ID,
+      authority:`https://login.microsoftonline.com/${MS_TENANT_ID||'common'}`,
+      redirectUri: window.location.origin + window.location.pathname,
+    },
+    cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}
+  });
+}
+
+async function getGraphToken(){
+  initMsal();
+  if(!msalApp) return null;
+  const accounts = msalApp.getAllAccounts();
+  if(!accounts.length) return null;
+  const req = {scopes:['Files.ReadWrite','User.Read'], account:accounts[0]};
+  try{ const r=await msalApp.acquireTokenSilent(req); return r.accessToken; }
+  catch{ try{ const r=await msalApp.acquireTokenPopup(req); return r.accessToken; }catch{return null;} }
+}
+
+async function msSignInPopup(){
+  initMsal();
+  if(!msalApp) return false;
+  try{
+    const r=await msalApp.loginPopup({scopes:['Files.ReadWrite','User.Read']});
+    msalApp.setActiveAccount(r.account);
+    return true;
+  }catch(e){ console.error(e); return false; }
+}
+
+function encodeShareUrl(url){
+  return 'u!'+btoa(url).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+}
+
+async function resolveShareItem(token){
+  if(_msDriveId && _msItemId) return true;
+  const shareId=encodeShareUrl(MS_SHARE_URL);
+  const r=await fetch(`https://graph.microsoft.com/v1.0/shares/${shareId}/driveItem`,
+    {headers:{Authorization:`Bearer ${token}`}});
+  if(!r.ok) return false;
+  const item=await r.json();
+  _msDriveId=item.parentReference?.driveId;
+  _msItemId=item.id;
+  return !!(_msDriveId && _msItemId);
+}
+
+async function loadFromGraph(){
+  if(!MS_SHARE_URL||!MS_CLIENT_ID){return false;}
+  setSyncStatus('syncing');
+  const token=await getGraphToken();
+  if(!token){setSyncStatus('error');return false;}
+  try{
+    const shareId=encodeShareUrl(MS_SHARE_URL);
+    const r=await fetch(`https://graph.microsoft.com/v1.0/shares/${shareId}/driveItem/content`,
+      {headers:{Authorization:`Bearer ${token}`}});
+    if(!r.ok){setSyncStatus('error');return false;}
+    const d=await r.json();
+    if(d.employees) employees=d.employees;
+    if(d.attendance) attendance=d.attendance;
+    if(d.leaves) leaves=d.leaves;
+    if(d.holidays) holidays=d.holidays;
+    if(d.adminpass) localStorage.setItem('hr_adminpass',d.adminpass);
+    localStorage.setItem('hr_emp',JSON.stringify(employees));
+    localStorage.setItem('hr_att',JSON.stringify(attendance));
+    localStorage.setItem('hr_lv',JSON.stringify(leaves));
+    localStorage.setItem('hr_hol',JSON.stringify(holidays));
+    setSyncStatus('ok');
+    return true;
+  }catch{setSyncStatus('error');return false;}
+}
+
+async function saveToGraph(){
+  if(!MS_SHARE_URL||!MS_CLIENT_ID) return;
+  const token=await getGraphToken();
+  if(!token){setSyncStatus('error');return;}
+  setSyncStatus('syncing');
+  try{
+    const ok=await resolveShareItem(token);
+    if(!ok){setSyncStatus('error');return;}
+    const r=await fetch(
+      `https://graph.microsoft.com/v1.0/drives/${_msDriveId}/items/${_msItemId}/content`,
+      {method:'PUT',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+       body:JSON.stringify({employees,attendance,leaves,holidays,adminpass:localStorage.getItem('hr_adminpass')||'admin123'})});
+    setSyncStatus(r.ok?'ok':'error');
+  }catch{setSyncStatus('error');}
+}
+
+// Called from login screen "Load from Microsoft 365" button
+async function msSyncAndLoad(){
+  const btn=document.getElementById('msSyncBtn');
+  if(btn){btn.textContent='Signing in…';btn.disabled=true;}
+  const signedIn = await msSignInPopup();
+  if(signedIn){
+    const loaded = await loadFromGraph();
+    buildLoginSel();
+    if(loaded){
+      if(btn){btn.textContent='✓ Data loaded — now sign in below';btn.style.background='#e6f9f0';btn.style.color='#0a7c4d';}
+    } else {
+      if(btn){btn.textContent='⚠ Could not load data';btn.style.color='#b91c1c';btn.disabled=false;}
+    }
+  } else {
+    if(btn){btn.textContent='Load data from Microsoft 365';btn.disabled=false;}
+  }
+}
+
+// ═══════════════════════════════════
+// FIREBASE CONFIG (fallback option)
+// ═══════════════════════════════════
+let FIREBASE_URL = localStorage.getItem('hr_fburl') || '';
+
+// ═══════════════════════════════════
 // DATA
 // ═══════════════════════════════════
-let employees = JSON.parse(localStorage.getItem('hr_emp')||'null')||[
+const INIT_EMP = [
   {id:1,name:'Kwangmook Kang',position:'General Manager',annualLeave:15,joinDate:'2020-03-01',username:'km.kang',password:'pass123'},
   {id:2,name:'Jisu Kim',position:'Sales Manager',annualLeave:15,joinDate:'2021-06-15',username:'jisu.kim',password:'pass123'},
   {id:3,name:'Hyunwoo Lee',position:'Business Analyst',annualLeave:12,joinDate:'2022-09-01',username:'hw.lee',password:'pass123'},
 ];
+let employees = JSON.parse(localStorage.getItem('hr_emp')||'null') || INIT_EMP;
 let attendance  = JSON.parse(localStorage.getItem('hr_att')||'[]');
 let leaves      = JSON.parse(localStorage.getItem('hr_lv') ||'[]');
 let holidays    = JSON.parse(localStorage.getItem('hr_hol')||'[]');
-// holidays: [{id, date:'YYYY-MM-DD', name}]
 
+// sync status: 'ok' | 'syncing' | 'error' | 'local'
+let syncStatus = 'local';
+
+function setSyncStatus(s){
+  syncStatus=s;
+  const el=document.getElementById('syncBadge');
+  if(!el) return;
+  const map={
+    ok:   {t:'☁ Synced',      c:'#0a7c4d',bg:'#e6f9f0'},
+    syncing:{t:'↻ Syncing…',  c:'#b45309',bg:'#fff8e1'},
+    error:{t:'⚠ Sync Error',  c:'#b91c1c',bg:'#fef2f2'},
+    local:{t:'💾 Local only', c:'#6b7280',bg:'#f3f4f6'},
+    ms:   {t:'🏢 M365 Synced',c:'#0078d4',bg:'#e8f0fe'},
+  };
+  const m=map[s]||map.local;
+  el.textContent=m.t; el.style.color=m.c; el.style.background=m.bg;
+}
+
+// Save: always write localStorage + push to MS Graph or Firebase
 function save(){
   localStorage.setItem('hr_emp',JSON.stringify(employees));
   localStorage.setItem('hr_att',JSON.stringify(attendance));
   localStorage.setItem('hr_lv', JSON.stringify(leaves));
   localStorage.setItem('hr_hol',JSON.stringify(holidays));
+  if(MS_SHARE_URL && MS_CLIENT_ID) saveToGraph();
+  else if(FIREBASE_URL) pushToFirebase();
+}
+
+function pushToFirebase(){
+  setSyncStatus('syncing');
+  fetch(`${FIREBASE_URL}/hrdata.json`,{
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({employees,attendance,leaves,holidays,
+      adminpass:localStorage.getItem('hr_adminpass')||'admin123'})
+  }).then(r=>r.ok?setSyncStatus('ok'):setSyncStatus('error'))
+    .catch(()=>setSyncStatus('error'));
+}
+
+async function loadFromFirebase(){
+  if(!FIREBASE_URL){setSyncStatus('local');return;}
+  setSyncStatus('syncing');
+  try{
+    const r=await fetch(`${FIREBASE_URL}/hrdata.json`);
+    const d=await r.json();
+    if(d){
+      if(d.employees) employees=d.employees;
+      if(d.attendance) attendance=d.attendance;
+      if(d.leaves) leaves=d.leaves;
+      if(d.holidays) holidays=d.holidays;
+      if(d.adminpass) localStorage.setItem('hr_adminpass',d.adminpass);
+      // cache locally
+      localStorage.setItem('hr_emp',JSON.stringify(employees));
+      localStorage.setItem('hr_att',JSON.stringify(attendance));
+      localStorage.setItem('hr_lv', JSON.stringify(leaves));
+      localStorage.setItem('hr_hol',JSON.stringify(holidays));
+      setSyncStatus('ok');
+    } else { setSyncStatus('ok'); }
+  }catch(e){ setSyncStatus('error'); }
+  buildLoginSel();
 }
 
 // ═══════════════════════════════════
@@ -248,6 +434,7 @@ function buildTabs(){
     {id:'leave',icon:'🏖️',label:'Leave'},
     {id:'holidays',icon:'📅',label:'Holidays',adm:true},
     {id:'report',icon:'📁',label:'Monthly Report',adm:true},
+    {id:'setup',icon:'⚙️',label:'Setup',adm:true},
   ].filter(t=>isAdmin||!t.adm);
   document.getElementById('tabBar').innerHTML=tabs.map(t=>
     `<button class="tab${t.id===currentTab?' active':''}" onclick="switchTab('${t.id}')">${t.icon} ${t.label}</button>`
@@ -320,6 +507,7 @@ function render(){
     leave:renderLeave,
     holidays:renderHolidays,
     report:renderReport,
+    setup:renderSetup,
   }[currentTab]();
 }
 
@@ -1046,16 +1234,195 @@ function exportExcel(){
 }
 
 // ═══════════════════════════════════
+// SETUP TAB
+// ═══════════════════════════════════
+function renderSetup(){
+  const msOk = !!(MS_CLIENT_ID && MS_SHARE_URL);
+  const fbOk = !!FIREBASE_URL;
+
+  const statusBar = msOk
+    ? `<div style="background:#e8f0fe;border:1px solid #90b4f5;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#0078d4">
+        🏢 <strong>Microsoft 365 connected.</strong> Data syncs via OneDrive/SharePoint.<br>
+        <span style="font-size:11px;color:#555;margin-top:3px;display:block">Client ID: ${MS_CLIENT_ID.slice(0,8)}… · Share URL: set</span>
+      </div>`
+    : fbOk
+    ? `<div style="background:#e6f9f0;border:1px solid #a7f3d0;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#0a7c4d">
+        ☁ <strong>Firebase connected.</strong> All changes sync in real-time.<br>
+        <span style="font-size:11px;color:#555;margin-top:3px;display:block">URL: ${FIREBASE_URL}</span>
+      </div>`
+    : `<div style="background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#b45309">
+        ⚠ <strong>Not connected.</strong> Data is saved locally — employees on other devices won't see your changes.
+      </div>`;
+
+  return`
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">⚙️ Cloud Sync Setup</div>
+    <div style="font-size:13px;color:#888;margin-bottom:16px">Choose one method to sync data across all devices.</div>
+    ${statusBar}
+
+    <!-- ── MICROSOFT 365 ── -->
+    <div class="card" style="margin-bottom:14px;border-color:${msOk?'#90b4f5':'#e0e0e0'}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:20px">🏢</span>
+        <div>
+          <div style="font-weight:700;font-size:14px">Microsoft 365 / OneDrive <span style="background:#e8f0fe;color:#0078d4;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px">RECOMMENDED</span></div>
+          <div style="font-size:12px;color:#888">Uses your existing M365 account. No extra service needed.</div>
+        </div>
+      </div>
+
+      <details style="margin-bottom:14px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#0078d4;list-style:none;display:flex;align-items:center;gap:6px">
+          📋 Setup Guide (10 minutes, one-time)
+        </summary>
+        <ol style="line-height:2;padding-left:20px;font-size:13px;color:#444;margin-top:10px">
+          <li>Go to <a href="https://portal.azure.com" target="_blank" style="color:#0078d4">portal.azure.com</a> → <strong>Azure Active Directory → App registrations → New registration</strong></li>
+          <li>Name: <em>Attendance App</em> · Supported account types: <em>Accounts in this organizational directory only</em><br>
+              Redirect URI: <strong>Single-page application (SPA)</strong> → enter <code style="background:#f3f4f6;padding:1px 5px;border-radius:3px;font-size:11px">${window.location.origin+window.location.pathname}</code></li>
+          <li>Click <strong>Register</strong> → copy <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong></li>
+          <li>Go to <strong>API permissions → Add a permission → Microsoft Graph → Delegated → Files.ReadWrite</strong> → Add</li>
+          <li>Now create the shared data file:<br>
+              Go to <a href="https://onedrive.live.com" target="_blank" style="color:#0078d4">OneDrive</a> or SharePoint → create a new folder <em>AttendanceApp</em><br>
+              Create an empty text file named <code style="background:#f3f4f6;padding:1px 5px;border-radius:3px;font-size:11px">hrdata.json</code> (put <code style="background:#f3f4f6;padding:1px 5px;border-radius:3px;font-size:11px">{}</code> as content)</li>
+          <li>Right-click <code>hrdata.json</code> → <strong>Share → People in [your org] with the link can edit</strong> → Copy link</li>
+          <li>Paste the Client ID, Tenant ID, and sharing link below → click <strong>Connect & Upload</strong></li>
+          <li>Sign in with your Microsoft account when the popup appears</li>
+          <li>Share this HTML file with your team — everyone loads from the same file!</li>
+        </ol>
+      </details>
+
+      <div class="fgrid" style="margin-bottom:10px">
+        <div class="fg"><label>Application (Client) ID</label><input id="msClientId" value="${MS_CLIENT_ID}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+        <div class="fg"><label>Directory (Tenant) ID</label><input id="msTenantId" value="${MS_TENANT_ID==='common'?'':MS_TENANT_ID}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+        <div class="fg full"><label>OneDrive/SharePoint Sharing URL (hrdata.json)</label><input id="msShareUrl" value="${MS_SHARE_URL}" placeholder="https://tenant.sharepoint.com/:u:/..."></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="connectMS365()">🏢 Connect &amp; Upload Data</button>
+        ${msOk?`<button class="btn btn-sm" onclick="loadMS365()">↻ Reload from OneDrive</button>`:''}
+        ${msOk?`<button class="btn btn-danger btn-sm" onclick="disconnectMS()">Disconnect</button>`:''}
+      </div>
+      <div class="err-msg" id="msErr" style="margin-top:8px"></div>
+    </div>
+
+    <!-- ── FIREBASE (alternative) ── -->
+    <div class="card" style="border-color:${fbOk?'#a7f3d0':'#e0e0e0'}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-size:20px">🔥</span>
+        <div>
+          <div style="font-weight:700;font-size:14px">Firebase (Google) — Alternative</div>
+          <div style="font-size:12px;color:#888">If you don't want to use Microsoft Azure. Requires a Google account.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input id="fbUrl" value="${FIREBASE_URL}" placeholder="https://your-app-default-rtdb.firebaseio.com" style="flex:1;min-width:260px;font-size:13px">
+        <button class="btn btn-primary" onclick="connectFirebase()">Connect &amp; Upload</button>
+        ${fbOk?`<button class="btn btn-danger btn-sm" onclick="disconnectFirebase()">Disconnect</button>`:''}
+      </div>
+      <div class="err-msg" id="fbErr" style="margin-top:8px"></div>
+    </div>`;
+}
+
+async function connectMS365(){
+  const clientId=document.getElementById('msClientId').value.trim();
+  const tenantId=document.getElementById('msTenantId').value.trim()||'common';
+  const shareUrl=document.getElementById('msShareUrl').value.trim();
+  const err=document.getElementById('msErr');
+  err.style.color='#b91c1c'; err.textContent='';
+  if(!clientId||!shareUrl){err.textContent='Client ID and sharing URL are required.';return;}
+  // Save config
+  MS_CLIENT_ID=clientId; MS_TENANT_ID=tenantId; MS_SHARE_URL=shareUrl;
+  localStorage.setItem('ms_clientid',clientId);
+  localStorage.setItem('ms_tenantid',tenantId);
+  localStorage.setItem('ms_shareurl',shareUrl);
+  _msDriveId=null; _msItemId=null; msalApp=null;
+  // Show MS sign-in button on login page
+  showMsLoginBtn();
+  err.textContent='Signing in with Microsoft…';
+  const ok=await msSignInPopup();
+  if(!ok){err.textContent='Sign-in cancelled or failed. Try again.';return;}
+  err.textContent='Uploading data to OneDrive…';
+  await saveToGraph();
+  if(syncStatus==='ok'){
+    err.style.color='#0a7c4d';
+    err.textContent='✓ Connected! Data uploaded. Share this HTML file with your team — they will click "Load from Microsoft 365" to sync.';
+    buildTabs(); render();
+  } else {
+    err.textContent='Upload failed. Check that the sharing URL is correct and "People in org can edit" is enabled.';
+  }
+}
+async function loadMS365(){
+  const err=document.getElementById('msErr');
+  err.style.color='#555'; err.textContent='Loading from OneDrive…';
+  await loadFromGraph();
+  buildLoginSel();
+  err.style.color=syncStatus==='ok'?'#0a7c4d':'#b91c1c';
+  err.textContent=syncStatus==='ok'?'✓ Data reloaded successfully.':'Failed to load data.';
+}
+function disconnectMS(){
+  if(!confirm('Disconnect Microsoft 365 sync?')) return;
+  MS_CLIENT_ID=''; MS_TENANT_ID='common'; MS_SHARE_URL='';
+  localStorage.removeItem('ms_clientid'); localStorage.removeItem('ms_tenantid'); localStorage.removeItem('ms_shareurl');
+  msalApp=null; _msDriveId=null; _msItemId=null;
+  setSyncStatus('local'); showMsLoginBtn(); buildTabs(); render();
+}
+
+function showMsLoginBtn(){
+  const btn=document.getElementById('msSyncBtn');
+  const div=document.getElementById('msDivider');
+  if(!btn||!div) return;
+  const show=!!(MS_CLIENT_ID && MS_SHARE_URL);
+  btn.style.display=show?'flex':'none';
+  div.style.display=show?'block':'none';
+}
+
+async function connectFirebase(){
+  const url=document.getElementById('fbUrl').value.trim().replace(/\/$/,'');
+  const err=document.getElementById('fbErr');
+  err.style.color='#555'; err.textContent='';
+  if(!url){err.style.color='#b91c1c';err.textContent='Please enter your Firebase URL.';return;}
+  if(!url.startsWith('https://')||!url.includes('firebaseio.com')){err.style.color='#b91c1c';err.textContent='URL must be like: https://your-app-default-rtdb.firebaseio.com';return;}
+  err.textContent='Testing connection…';
+  try{
+    const r=await fetch(`${url}/hrdata.json`,{method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({employees,attendance,leaves,holidays,adminpass:localStorage.getItem('hr_adminpass')||'admin123'})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    FIREBASE_URL=url; localStorage.setItem('hr_fburl',url);
+    setSyncStatus('ok');
+    err.style.color='#0a7c4d';
+    err.textContent='✓ Connected! Share this HTML file with your team.';
+    buildTabs(); render();
+  }catch(e){err.style.color='#b91c1c';err.textContent='Connection failed. Check the URL and Rules settings.';}
+}
+function disconnectFirebase(){
+  if(!confirm('Disconnect Firebase?')) return;
+  FIREBASE_URL=''; localStorage.removeItem('hr_fburl');
+  setSyncStatus('local'); buildTabs(); render();
+}
+
+// ═══════════════════════════════════
 // INIT
 // ═══════════════════════════════════
-// Pre-load some Polish public holidays for May 2026 as demo
-if(!localStorage.getItem('hr_hol')){
-  holidays=[
-    {id:1,date:'2026-05-01',name:'Labour Day'},
-    {id:2,date:'2026-05-03',name:'Constitution Day'},
-  ];
-  save();
-}
+(async function init(){
+  // Polish holidays on first run
+  if(!localStorage.getItem('hr_hol')){
+    holidays=[{id:1,date:'2026-05-01',name:'Labour Day'},{id:2,date:'2026-05-03',name:'Constitution Day'}];
+    save();
+  }
+  // Show MS login button if configured
+  showMsLoginBtn();
+  // Try silent MS Graph load first
+  if(MS_CLIENT_ID && MS_SHARE_URL){
+    initMsal();
+    if(msalApp && msalApp.getAllAccounts().length>0){
+      await loadFromGraph();
+    } else {
+      setSyncStatus('local');
+    }
+  } else if(FIREBASE_URL){
+    await loadFromFirebase();
+  } else {
+    setSyncStatus('local');
+  }
+  buildLoginSel();
+})();
 </script>
 </body>
 </html>
