@@ -6,6 +6,7 @@
 <title>Attendance Management System</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f6fa;color:#1a1a2e;font-size:14px}
@@ -287,6 +288,66 @@ async function msSyncAndLoad(){
 }
 
 // ═══════════════════════════════════
+// EMAIL NOTIFICATION CONFIG
+// ═══════════════════════════════════
+let PA_WEBHOOK_URL  = localStorage.getItem('pa_webhook')     || '';
+let EJS_PUBLIC_KEY  = localStorage.getItem('ejs_pubkey')     || '';
+let EJS_SERVICE_ID  = localStorage.getItem('ejs_service')    || '';
+let EJS_TMPL_ADMIN  = localStorage.getItem('ejs_tmpl_admin') || '';
+let EJS_TMPL_EMP    = localStorage.getItem('ejs_tmpl_emp')   || '';
+let EJS_ADMIN_EMAIL = localStorage.getItem('ejs_admin_email')|| '';
+const APP_URL = 'https://kkm5dor2-ai.github.io/attendance-app/';
+
+function initEmailJS(){ if(EJS_PUBLIC_KEY) emailjs.init(EJS_PUBLIC_KEY); }
+
+// Power Automate: fire-and-forget (no-cors)
+function sendViaPowerAutomate(to_email, subject, body){
+  if(!PA_WEBHOOK_URL||!to_email) return false;
+  fetch(PA_WEBHOOK_URL,{method:'POST',mode:'no-cors',
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({to_email,subject,body})
+  }).catch(e=>console.error('PA error:',e));
+  return true;
+}
+
+async function sendLeaveRequestEmail(leave, emp){
+  const subject=`[Leave Request] ${emp.name} — ${leave.type}`;
+  const body=`<p style="font-family:sans-serif">New leave request submitted.</p>
+<table style="border-collapse:collapse;font-family:sans-serif;font-size:14px;margin:10px 0">
+  <tr><td style="padding:5px 16px 5px 0;color:#666">Employee</td><td><b>${emp.name}</b></td></tr>
+  <tr><td style="padding:5px 16px 5px 0;color:#666">Type</td><td>${leave.type}</td></tr>
+  <tr><td style="padding:5px 16px 5px 0;color:#666">Period</td><td><b>${leave.startDate} → ${leave.endDate}</b> (${leave.days} days)</td></tr>
+  <tr><td style="padding:5px 16px 5px 0;color:#666">Reason</td><td>${leave.reason}</td></tr>
+</table>
+<br><a href="${APP_URL}" style="background:#1a56db;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-family:sans-serif;font-weight:bold">Open App → Approve / Reject</a>`;
+
+  if(PA_WEBHOOK_URL){ sendViaPowerAutomate(EJS_ADMIN_EMAIL, subject, body); return; }
+  if(!EJS_PUBLIC_KEY||!EJS_SERVICE_ID||!EJS_TMPL_ADMIN||!EJS_ADMIN_EMAIL) return;
+  try{ await emailjs.send(EJS_SERVICE_ID,EJS_TMPL_ADMIN,{
+    admin_email:EJS_ADMIN_EMAIL,employee_name:emp.name,leave_type:leave.type,
+    start_date:leave.startDate,end_date:leave.endDate,days:leave.days,reason:leave.reason,app_url:APP_URL
+  });}catch(e){console.error('EmailJS:',e);}
+}
+
+async function sendLeaveResultEmail(leave, emp, status){
+  const ok=status==='approved';
+  const subject=`[Leave ${ok?'Approved ✓':'Rejected ✗'}] ${leave.type} (${leave.startDate})`;
+  const body=`<p style="font-family:sans-serif">Your leave request has been <b style="color:${ok?'#0a7c4d':'#b91c1c'}">${ok?'Approved ✓':'Rejected ✗'}</b>.</p>
+<table style="border-collapse:collapse;font-family:sans-serif;font-size:14px;margin:10px 0">
+  <tr><td style="padding:5px 16px 5px 0;color:#666">Type</td><td>${leave.type}</td></tr>
+  <tr><td style="padding:5px 16px 5px 0;color:#666">Period</td><td>${leave.startDate} → ${leave.endDate} (${leave.days} days)</td></tr>
+</table>
+<p style="font-family:sans-serif;color:#555;font-size:13px">${ok?'Enjoy your time off!':'Please contact your manager for details.'}</p>`;
+
+  if(PA_WEBHOOK_URL){ sendViaPowerAutomate(emp.email, subject, body); return; }
+  if(!EJS_PUBLIC_KEY||!EJS_SERVICE_ID||!EJS_TMPL_EMP||!emp.email) return;
+  try{ await emailjs.send(EJS_SERVICE_ID,EJS_TMPL_EMP,{
+    to_email:emp.email,employee_name:emp.name,status:ok?'Approved ✓':'Rejected ✗',
+    leave_type:leave.type,start_date:leave.startDate,end_date:leave.endDate,days:leave.days,
+    message:ok?'Your leave has been approved.':'Your leave was not approved.'
+  });}catch(e){console.error('EmailJS:',e);}
+}
+// ═══════════════════════════════════
 // FIREBASE CONFIG (fallback option)
 // ═══════════════════════════════════
 let FIREBASE_URL = localStorage.getItem('hr_fburl') || 'https://attendance-app-7af3b-default-rtdb.europe-west1.firebasedatabase.app';
@@ -494,7 +555,16 @@ function updateAtt(empId,date,patch){
   else attendance.push({id:Date.now(),empId,date,checkIn:'',checkOut:'',status:'normal',note:'',...patch});
   save();
 }
-function approveLeave(id,status){leaves=leaves.map(l=>l.id===id?{...l,status}:l);save();render();}
+function approveLeave(id,status){
+  const leave=leaves.find(l=>l.id===id);
+  leaves=leaves.map(l=>l.id===id?{...l,status}:l);
+  save();render();
+  // 이메일 알림 발송 (직원에게)
+  if(leave){
+    const emp=employees.find(e=>e.id===leave.empId);
+    if(emp) sendLeaveResultEmail(leave,emp,status);
+  }
+}
 
 // ═══════════════════════════════════
 // RENDER
@@ -721,6 +791,7 @@ function openEmpForm(id){
       <div class="fgrid">
         <div class="fg"><label>Full Name *</label><input id="efN" value="${e?.name||''}" placeholder="John Smith"></div>
         <div class="fg"><label>Position *</label><input id="efP" value="${e?.position||''}" placeholder="Manager"></div>
+        <div class="fg"><label>Email (for notifications)</label><input id="efEm" type="email" value="${e?.email||''}" placeholder="employee@hyundaicorp.com"></div>
         <div class="fg"><label>Username *</label><input id="efU" value="${e?.username||''}" placeholder="john.smith"></div>
         <div class="fg"><label>Password ${e?'(blank=keep)':' *'}</label><input id="efPw" type="password" placeholder="${e?'Leave blank to keep':'Set password'}"></div>
         <div class="fg"><label>Annual Leave (days)</label><input id="efL" type="number" value="${e?.annualLeave||15}"></div>
@@ -733,11 +804,16 @@ function openEmpForm(id){
     </div>`;
 }
 function saveEmp(id){
-  const n=document.getElementById('efN').value.trim(),p=document.getElementById('efP').value.trim(),u=document.getElementById('efU').value.trim();
-  const pw=document.getElementById('efPw').value,al=parseInt(document.getElementById('efL').value)||15,jd=document.getElementById('efJ').value;
+  const n=document.getElementById('efN').value.trim();
+  const p=document.getElementById('efP').value.trim();
+  const em=document.getElementById('efEm').value.trim();
+  const u=document.getElementById('efU').value.trim();
+  const pw=document.getElementById('efPw').value;
+  const al=parseInt(document.getElementById('efL').value)||15;
+  const jd=document.getElementById('efJ').value;
   if(!n||!p||!u)return alert('Name, position and username are required.');
-  if(id)employees=employees.map(e=>e.id===id?{...e,name:n,position:p,username:u,annualLeave:al,joinDate:jd,...(pw?{password:pw}:{})}:e);
-  else{if(!pw)return alert('Password required for new employee.');employees.push({id:Date.now(),name:n,position:p,username:u,password:pw,annualLeave:al,joinDate:jd});}
+  if(id)employees=employees.map(e=>e.id===id?{...e,name:n,position:p,email:em,username:u,annualLeave:al,joinDate:jd,...(pw?{password:pw}:{})}:e);
+  else{if(!pw)return alert('Password required for new employee.');employees.push({id:Date.now(),name:n,position:p,email:em,username:u,password:pw,annualLeave:al,joinDate:jd});}
   save();buildLoginSel();render();
 }
 function delEmp(id){const e=employees.find(x=>x.id===id);if(confirm(`Delete "${e.name}"?`)){employees=employees.filter(x=>x.id!==id);save();render();}}
@@ -951,8 +1027,14 @@ function submitLeave(){
   const reason=document.getElementById('lfR').value.trim();
   if(!reason)return alert('Please provide a reason.');
   const days=type.includes('Half Day')?0.5:Math.max(1,Math.round((new Date(end)-new Date(start))/86400000)+1);
-  leaves.push({id:Date.now(),empId,type,startDate:start,endDate:end,reason,days,status:'pending'});
+  const newLeave={id:Date.now(),empId,type,startDate:start,endDate:end,reason,days,status:'pending'};
+  leaves.push(newLeave);
   save();showLvForm=false;render();
+  // 이메일 알림 발송 (Admin에게)
+  if(!isAdmin){
+    const emp=employees.find(e=>e.id===empId);
+    sendLeaveRequestEmail(newLeave,emp);
+  }
 }
 function saveEditLeave(id){
   const empId=parseInt(document.getElementById('elE').value);
@@ -1317,10 +1399,124 @@ function renderSetup(){
         ${fbOk?`<button class="btn btn-danger btn-sm" onclick="disconnectFirebase()">Disconnect</button>`:''}
       </div>
       <div class="err-msg" id="fbErr" style="margin-top:8px"></div>
+    </div>
+
+    <!-- ── EMAIL NOTIFICATIONS ── -->
+    <div class="card" style="margin-top:14px;border-color:${PA_WEBHOOK_URL?'#a7f3d0':EJS_PUBLIC_KEY?'#a7f3d0':'#e0e0e0'}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:20px">✉️</span>
+        <div>
+          <div style="font-weight:700;font-size:14px">Email Notifications
+            ${PA_WEBHOOK_URL?`<span style="background:#e6f9f0;color:#0a7c4d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px">✓ Power Automate Active</span>`:EJS_PUBLIC_KEY?`<span style="background:#e6f9f0;color:#0a7c4d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px">✓ EmailJS Active</span>`:''}
+          </div>
+          <div style="font-size:12px;color:#888">직원 신청 시 Admin에게, 승인/반려 시 직원에게 자동 발송</div>
+        </div>
+      </div>
+
+      <!-- Power Automate (Primary) -->
+      <div style="border:1px solid ${PA_WEBHOOK_URL?'#a7f3d0':'#e0e0e0'};border-radius:10px;padding:14px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px">
+          🔵 Option 1 — Power Automate <span style="background:#e8f0fe;color:#0078d4;font-size:10px;padding:2px 7px;border-radius:10px;margin-left:4px">RECOMMENDED (M365 내장)</span>
+        </div>
+        <div style="font-size:12px;color:#888;margin-bottom:10px">회사 Outlook으로 직접 발송. 외부 서비스 불필요.</div>
+        <div class="fgrid" style="margin-bottom:10px">
+          <div class="fg full"><label>Power Automate Webhook URL</label>
+            <input id="paWebhook" value="${PA_WEBHOOK_URL}" placeholder="https://prod-xx.westeurope.logic.azure.com/..."></div>
+          <div class="fg full"><label>Admin Email (알림 받을 이메일)</label>
+            <input id="paAdminEmail" type="email" value="${EJS_ADMIN_EMAIL}" placeholder="kangkm@hyundaicorp.com"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="savePowerAutomate()">💾 Save</button>
+          ${PA_WEBHOOK_URL?`<button class="btn btn-sm" onclick="testPowerAutomate()">📧 Test Email</button>`:''}
+          ${PA_WEBHOOK_URL?`<button class="btn btn-danger btn-sm" onclick="clearPowerAutomate()">Clear</button>`:''}
+        </div>
+        <div class="err-msg" id="paErr" style="margin-top:8px"></div>
+      </div>
+
+      <!-- EmailJS (Alternative) -->
+      <details>
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#888;list-style:none">
+          🟠 Option 2 — EmailJS (Gmail 등 대안)
+        </summary>
+        <div style="margin-top:10px">
+          <div class="fgrid" style="margin-bottom:10px">
+            <div class="fg"><label>Public Key</label><input id="ejsPubKey" value="${EJS_PUBLIC_KEY}" placeholder="xxxxxxxxxxxxxxxxxxx"></div>
+            <div class="fg"><label>Service ID</label><input id="ejsService" value="${EJS_SERVICE_ID}" placeholder="service_xxxxxxx"></div>
+            <div class="fg"><label>Admin Template ID</label><input id="ejsTmplAdmin" value="${EJS_TMPL_ADMIN}" placeholder="template_xxxxxxx"></div>
+            <div class="fg"><label>Employee Template ID</label><input id="ejsTmplEmp" value="${EJS_TMPL_EMP}" placeholder="template_xxxxxxx"></div>
+            <div class="fg full"><label>Admin Email</label><input id="ejsAdminEmail" type="email" value="${EJS_ADMIN_EMAIL}" placeholder="kangkm@hyundaicorp.com"></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="saveEmailJS()">💾 Save</button>
+            ${EJS_PUBLIC_KEY?`<button class="btn btn-sm" onclick="testEmailJS()">📧 Test</button>`:''}
+            ${EJS_PUBLIC_KEY?`<button class="btn btn-danger btn-sm" onclick="clearEmailJS()">Clear</button>`:''}
+          </div>
+          <div class="err-msg" id="ejsErr" style="margin-top:8px"></div>
+        </div>
+      </details>
+
+      <div style="margin-top:12px;padding:10px;background:#f8f9fa;border-radius:8px;font-size:12px;color:#666">
+        ⚡ 직원 이메일 주소는 <strong>Employees 탭 → Edit</strong>에서 각 직원별로 입력해야 승인/반려 알림이 발송됩니다.
+      </div>
     </div>`;
 }
 
-async function connectMS365(){
+function savePowerAutomate(){
+  const url=document.getElementById('paWebhook').value.trim();
+  const ae=document.getElementById('paAdminEmail').value.trim();
+  const err=document.getElementById('paErr');
+  if(!url||!ae){err.style.color='#b91c1c';err.textContent='Webhook URL and Admin Email are required.';return;}
+  PA_WEBHOOK_URL=url; EJS_ADMIN_EMAIL=ae;
+  localStorage.setItem('pa_webhook',url);
+  localStorage.setItem('ejs_admin_email',ae);
+  err.style.color='#0a7c4d';err.textContent='✓ Power Automate connected! Email notifications are active.';
+  setTimeout(()=>render(),1500);
+}
+function testPowerAutomate(){
+  const err=document.getElementById('paErr');
+  err.style.color='#555';err.textContent='Sending test email…';
+  sendViaPowerAutomate(EJS_ADMIN_EMAIL,'[Test] Attendance App Notification',
+    '<p>This is a test email from your Attendance Management System.</p><p>If you received this, Power Automate is working correctly! ✓</p>');
+  setTimeout(()=>{err.style.color='#0a7c4d';err.textContent='✓ Test sent to '+EJS_ADMIN_EMAIL+'! Check your inbox in ~30 seconds.';},500);
+}
+function clearPowerAutomate(){
+  if(!confirm('Clear Power Automate settings?'))return;
+  PA_WEBHOOK_URL=''; localStorage.removeItem('pa_webhook'); render();
+}
+function saveEmailJS(){
+  const pk=document.getElementById('ejsPubKey').value.trim();
+  const sv=document.getElementById('ejsService').value.trim();
+  const ta=document.getElementById('ejsTmplAdmin').value.trim();
+  const te=document.getElementById('ejsTmplEmp').value.trim();
+  const ae=document.getElementById('ejsAdminEmail').value.trim();
+  const err=document.getElementById('ejsErr');
+  if(!pk||!sv||!ta||!te||!ae){err.style.color='#b91c1c';err.textContent='All fields required.';return;}
+  EJS_PUBLIC_KEY=pk;EJS_SERVICE_ID=sv;EJS_TMPL_ADMIN=ta;EJS_TMPL_EMP=te;EJS_ADMIN_EMAIL=ae;
+  localStorage.setItem('ejs_pubkey',pk);localStorage.setItem('ejs_service',sv);
+  localStorage.setItem('ejs_tmpl_admin',ta);localStorage.setItem('ejs_tmpl_emp',te);
+  localStorage.setItem('ejs_admin_email',ae);
+  initEmailJS();
+  err.style.color='#0a7c4d';err.textContent='✓ EmailJS active!';
+  setTimeout(()=>render(),1500);
+}
+async function testEmailJS(){
+  const err=document.getElementById('ejsErr');
+  err.style.color='#555';err.textContent='Sending test…';
+  try{
+    await emailjs.send(EJS_SERVICE_ID,EJS_TMPL_ADMIN,{
+      admin_email:EJS_ADMIN_EMAIL,employee_name:'Test Employee',
+      leave_type:'Annual Leave',start_date:'2026-06-10',end_date:'2026-06-12',
+      days:3,reason:'Test notification',app_url:APP_URL,
+    });
+    err.style.color='#0a7c4d';err.textContent='✓ Test sent to '+EJS_ADMIN_EMAIL;
+  }catch(e){err.style.color='#b91c1c';err.textContent='Failed: '+(e.text||e.message||JSON.stringify(e));}
+}
+function clearEmailJS(){
+  if(!confirm('Clear EmailJS settings?'))return;
+  EJS_PUBLIC_KEY='';EJS_SERVICE_ID='';EJS_TMPL_ADMIN='';EJS_TMPL_EMP='';EJS_ADMIN_EMAIL='';
+  ['ejs_pubkey','ejs_service','ejs_tmpl_admin','ejs_tmpl_emp','ejs_admin_email'].forEach(k=>localStorage.removeItem(k));
+  render();
+}
   const clientId=document.getElementById('msClientId').value.trim();
   const tenantId=document.getElementById('msTenantId').value.trim()||'common';
   const shareUrl=document.getElementById('msShareUrl').value.trim();
@@ -1405,6 +1601,8 @@ function disconnectFirebase(){
 // INIT
 // ═══════════════════════════════════
 (async function init(){
+  // EmailJS 초기화
+  initEmailJS();
   // MS 설정 강제 초기화 (Firebase 사용 시)
   if(FIREBASE_URL){
     MS_CLIENT_ID=''; MS_TENANT_ID='common'; MS_SHARE_URL='';
