@@ -494,10 +494,7 @@ function updateAtt(empId,date,patch){
   else attendance.push({id:Date.now(),empId,date,checkIn:'',checkOut:'',status:'normal',note:'',...patch});
   save();
 }
-function approveLeave(id,status){
-  leaves=leaves.map(l=>l.id===id?{...l,status}:l);
-  save();render();
-}
+function approveLeave(id,status){leaves=leaves.map(l=>l.id===id?{...l,status}:l);save();render();}
 
 // ═══════════════════════════════════
 // RENDER
@@ -736,12 +733,8 @@ function openEmpForm(id){
     </div>`;
 }
 function saveEmp(id){
-  const n=document.getElementById('efN').value.trim();
-  const p=document.getElementById('efP').value.trim();
-  const u=document.getElementById('efU').value.trim();
-  const pw=document.getElementById('efPw').value;
-  const al=parseInt(document.getElementById('efL').value)||15;
-  const jd=document.getElementById('efJ').value;
+  const n=document.getElementById('efN').value.trim(),p=document.getElementById('efP').value.trim(),u=document.getElementById('efU').value.trim();
+  const pw=document.getElementById('efPw').value,al=parseInt(document.getElementById('efL').value)||15,jd=document.getElementById('efJ').value;
   if(!n||!p||!u)return alert('Name, position and username are required.');
   if(id)employees=employees.map(e=>e.id===id?{...e,name:n,position:p,username:u,annualLeave:al,joinDate:jd,...(pw?{password:pw}:{})}:e);
   else{if(!pw)return alert('Password required for new employee.');employees.push({id:Date.now(),name:n,position:p,username:u,password:pw,annualLeave:al,joinDate:jd});}
@@ -1327,6 +1320,7 @@ function renderSetup(){
     </div>`;
 }
 
+async function connectMS365(){
   const clientId=document.getElementById('msClientId').value.trim();
   const tenantId=document.getElementById('msTenantId').value.trim()||'common';
   const shareUrl=document.getElementById('msShareUrl').value.trim();
@@ -1411,33 +1405,29 @@ function disconnectFirebase(){
 // INIT
 // ═══════════════════════════════════
 (async function init(){
-  // MS 설정 강제 초기화 (Firebase 사용 시)
-  if(FIREBASE_URL){
+  // Firebase가 하드코딩되어 있으면 MS 설정 강제 초기화
+  if(FIREBASE_URL && FIREBASE_URL !== ''){
     MS_CLIENT_ID=''; MS_TENANT_ID='common'; MS_SHARE_URL='';
     localStorage.removeItem('ms_clientid'); localStorage.removeItem('ms_tenantid'); localStorage.removeItem('ms_shareurl');
-    msalApp=null;
   }
+  // Polish holidays on first run
+  if(!localStorage.getItem('hr_hol')){
+    holidays=[{id:1,date:'2026-05-01',name:'Labour Day'},{id:2,date:'2026-05-03',name:'Constitution Day'}];
+    save();
+  }
+  // Show MS login button if configured
   showMsLoginBtn();
-
-  // Firebase 연결된 경우: 무조건 Firebase 먼저 로드 (로컬 초기화 금지)
-  if(FIREBASE_URL){
-    await loadFromFirebase();
-    // Firebase에 데이터가 없을 때만 기본값 설정 (Firebase에는 저장하지 않음)
-    if(!employees.length) employees=JSON.parse(JSON.stringify(INIT_EMP));
-    if(!holidays.length) holidays=[
-      {id:1,date:'2026-05-01',name:'Labour Day'},
-      {id:2,date:'2026-05-03',name:'Constitution Day'}
-    ];
-  } else if(MS_CLIENT_ID && MS_SHARE_URL){
+  // Try silent MS Graph load first
+  if(MS_CLIENT_ID && MS_SHARE_URL){
     initMsal();
-    if(msalApp && msalApp.getAllAccounts().length>0) await loadFromGraph();
-    else setSyncStatus('local');
-  } else {
-    // 로컬 전용일 때만 첫 실행 초기화
-    if(!localStorage.getItem('hr_hol')){
-      holidays=[{id:1,date:'2026-05-01',name:'Labour Day'},{id:2,date:'2026-05-03',name:'Constitution Day'}];
-      save();
+    if(msalApp && msalApp.getAllAccounts().length>0){
+      await loadFromGraph();
+    } else {
+      setSyncStatus('local');
     }
+  } else if(FIREBASE_URL){
+    await loadFromFirebase();
+  } else {
     setSyncStatus('local');
   }
   buildLoginSel();
