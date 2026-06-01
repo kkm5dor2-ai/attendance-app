@@ -290,12 +290,12 @@ async function msSyncAndLoad(){
 // ═══════════════════════════════════
 // EMAIL NOTIFICATION CONFIG
 // ═══════════════════════════════════
-let PA_WEBHOOK_URL  = localStorage.getItem('pa_webhook')     || '';
+let PA_WEBHOOK_URL  = localStorage.getItem('pa_webhook')     || 'https://default908f366a20cf49a7b68e7f2c8b41c9.ad.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/9263db58abc5497aa7567bd606b2e123/triggers/manual/paths/invoke?api-version=1';
 let EJS_PUBLIC_KEY  = localStorage.getItem('ejs_pubkey')     || '';
 let EJS_SERVICE_ID  = localStorage.getItem('ejs_service')    || '';
 let EJS_TMPL_ADMIN  = localStorage.getItem('ejs_tmpl_admin') || '';
 let EJS_TMPL_EMP    = localStorage.getItem('ejs_tmpl_emp')   || '';
-let EJS_ADMIN_EMAIL = localStorage.getItem('ejs_admin_email')|| '';
+let EJS_ADMIN_EMAIL = localStorage.getItem('ejs_admin_email')|| 'kangkm@hyundaicorp.com';
 const APP_URL = 'https://kkm5dor2-ai.github.io/attendance-app/';
 
 function initEmailJS(){ if(EJS_PUBLIC_KEY) emailjs.init(EJS_PUBLIC_KEY); }
