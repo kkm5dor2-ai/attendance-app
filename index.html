@@ -718,10 +718,10 @@ function submitLeave(){
 }
 
 function sendLeaveEmailNotification(empName, type, start, end, days, reason) {
-  // Power Automate 또는 외부 자동화 툴의 Webhook URL
-  const webhookUrl = '여기에_발급받은_WEBHOOK_URL을_입력하세요'; 
+  // 사용자가 발급받은 실제 Webhook URL 적용
+  const webhookUrl = 'https://default908f366a20cf49a7b68e7f2c8b41c9.ad.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/9263db58abc5497aa7567bd606b2e123/triggers/manual/paths/invoke?api-version=1'; 
   
-  if(webhookUrl === '여기에_발급받은_WEBHOOK_URL을_입력하세요') {
+  if(!webhookUrl || webhookUrl.includes('여기에_발급받은_WEBHOOK_URL을_입력하세요')) {
       console.warn('Webhook URL이 설정되지 않아 메일 발송 단계는 건너뜁니다.');
       return;
   }
