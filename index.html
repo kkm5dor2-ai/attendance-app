@@ -718,8 +718,8 @@ function submitLeave(){
 }
 
 function sendLeaveEmailNotification(empName, type, start, end, days, reason) {
-  // 사용자가 발급받은 실제 Webhook URL 적용
-  const webhookUrl = 'https://default908f366a20cf49a7b68e7f2c8b41c9.ad.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/9263db58abc5497aa7567bd606b2e123/triggers/manual/paths/invoke?api-version=1'; 
+  // 이제 완벽한 URL이 들어갑니다. (sig 토큰 포함)
+  const webhookUrl = 'https://default908f366a20cf49a7b68e7f2c8b41c9.ad.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/9263db58abc5497aa7567bd606b2e123/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=U2k-Lu1xlyQm7qvlrwve4u-QLRuKzCYDv_UmePsI1Zk'; 
   
   if(!webhookUrl || webhookUrl.includes('여기에_발급받은_WEBHOOK_URL을_입력하세요')) {
       console.warn('Webhook URL이 설정되지 않아 메일 발송 단계는 건너뜁니다.');
@@ -740,8 +740,14 @@ function sendLeaveEmailNotification(empName, type, start, end, days, reason) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   })
-  .then(response => console.log('근태 신청 알림 메일 발송 요청 성공'))
-  .catch(error => console.error('근태 신청 알림 메일 발송 실패:', error));
+  .then(response => {
+      if(response.ok) {
+          console.log('✅ 메일 전송 성공! (상태 코드: ' + response.status + ')');
+      } else {
+          console.error('❌ 메일 전송 실패 (상태 코드: ' + response.status + ')');
+      }
+  })
+  .catch(error => console.error('네트워크 에러:', error));
 }
 
 function saveEditLeave(id){
@@ -908,7 +914,7 @@ function renderSetup(){
     </div>
     <div style="font-size:12px;color:#555;background:#f8f9fa;border-radius:8px;padding:10px">
       <strong>Firebase URL:</strong> ${FIREBASE_URL}<br>
-      <strong>Share this file:</strong> Send the HTML file via Teams or email — everyone loads the same data automatically.
+      <strong>Share this file:</strong> Send the HTML file via Teams 또는 email — everyone loads the same data automatically.
     </div>
     <div style="margin-top:12px">
       <button class="btn btn-primary" onclick="reloadFromFirebase()">↻ Reload from Firebase</button>
