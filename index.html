@@ -706,9 +706,44 @@ function submitLeave(){
   const reason=document.getElementById('lfR').value.trim();
   if(!reason)return alert('Please provide a reason.');
   const days=type.includes('Half Day')?0.5:Math.max(1,Math.round((new Date(end)-new Date(start))/86400000)+1);
+  
   leaves.push({id:Date.now(),empId,type,startDate:start,endDate:end,reason,days,status:'pending'});
   save();showLvForm=false;render();
+
+  // ----- 웹훅(메일) 알림 발송 -----
+  const emp = employees.find(e => e.id === empId);
+  if(emp) {
+    sendLeaveEmailNotification(emp.name, type, start, end, days, reason);
+  }
 }
+
+function sendLeaveEmailNotification(empName, type, start, end, days, reason) {
+  // Power Automate 또는 외부 자동화 툴의 Webhook URL
+  const webhookUrl = '여기에_발급받은_WEBHOOK_URL을_입력하세요'; 
+  
+  if(webhookUrl === '여기에_발급받은_WEBHOOK_URL을_입력하세요') {
+      console.warn('Webhook URL이 설정되지 않아 메일 발송 단계는 건너뜁니다.');
+      return;
+  }
+
+  const payload = {
+    employeeName: empName,
+    leaveType: type,
+    startDate: start,
+    endDate: end,
+    totalDays: days,
+    reason: reason
+  };
+
+  fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(response => console.log('근태 신청 알림 메일 발송 요청 성공'))
+  .catch(error => console.error('근태 신청 알림 메일 발송 실패:', error));
+}
+
 function saveEditLeave(id){
   const empId=parseInt(document.getElementById('elE').value),type=document.getElementById('elT').value;
   const start=document.getElementById('elS').value,end=document.getElementById('elE2').value;
