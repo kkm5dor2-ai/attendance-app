@@ -173,7 +173,7 @@ let employees  = JSON.parse(localStorage.getItem('hr_emp')||'null') || JSON.pars
 let attendance = JSON.parse(localStorage.getItem('hr_att')||'[]');
 let leaves     = JSON.parse(localStorage.getItem('hr_lv') ||'[]');
 let holidays   = JSON.parse(localStorage.getItem('hr_hol')||'[]');
-let schedules  = JSON.parse(localStorage.getItem('hr_sched')||'[]'); // New: Schedules data
+let schedules  = JSON.parse(localStorage.getItem('hr_sched')||'[]');
 
 // ════════════════════════════════════════
 // FIREBASE SYNC
@@ -190,7 +190,7 @@ function saveLocal(){
   localStorage.setItem('hr_att',JSON.stringify(attendance));
   localStorage.setItem('hr_lv', JSON.stringify(leaves));
   localStorage.setItem('hr_hol',JSON.stringify(holidays));
-  localStorage.setItem('hr_sched',JSON.stringify(schedules)); // Save Schedules
+  localStorage.setItem('hr_sched',JSON.stringify(schedules));
 }
 
 function pushToFirebase(){
@@ -214,7 +214,7 @@ async function loadFromFirebase(){
       attendance=d.attendance||[];
       leaves=d.leaves||[];
       holidays=d.holidays||[];
-      schedules=d.schedules||[]; // Load Schedules
+      schedules=d.schedules||[];
       if(d.adminpass)localStorage.setItem('hr_adminpass',d.adminpass);
       saveLocal();
       setSyncStatus('ok');
@@ -239,7 +239,7 @@ let selectedMonth=nowMonth;
 let attDate=today;
 let showLvForm=false;
 let showHolForm=false;
-let showSchedForm=false; // New state
+let showSchedForm=false;
 let editLvId=null;
 
 function buildLoginSel(){
@@ -438,7 +438,7 @@ function renderDashboard(){
         <button onclick="calMonth='${nextStr}';render()">Next ›</button>
       </div>
     </div>
-    ${renderCalendar(calMonth,isAdmin?null:session.empId)}
+    ${renderCalendar(calMonth, null)}
     <div class="cal-legend">
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0a7c4d;margin-right:3px"></span>Present</span>
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#1a56db;margin-right:3px"></span>Leave</span>
@@ -449,7 +449,6 @@ function renderDashboard(){
     </div>
   </div>`;
 
-  // UI Components for Schedules
   const monthScheds = schedules.filter(s => s.startDate.startsWith(calMonth) || s.endDate.startsWith(calMonth)).sort((a,b)=>a.startDate.localeCompare(b.startDate));
   const schedRows = monthScheds.map(s => {
     const emp = employees.find(e => e.id === s.empId);
@@ -481,11 +480,34 @@ function renderDashboard(){
   </div>` : '';
 
   const schedArea = `<div class="sec-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">
-    <span>🗓️ Schedules (${MONTHS[cm-1]})</span>
+    <span>🗓️ Team Schedules (${MONTHS[cm-1]})</span>
     <button class="btn btn-sm btn-primary" onclick="showSchedForm=true;render()">+ Add Schedule</button>
   </div>
   ${schedFormHTML}
   <div style="margin-bottom:14px">${schedRows || '<div class="empty" style="padding:15px;background:#fff;border-radius:10px;border:1px solid #e0e0e0">No schedules this month</div>'}</div>`;
+
+  const lsCards=employees.map(emp=>{
+    const used=usedLeave(emp.id),rem=emp.annualLeave-used,rc=remColor(rem,emp.annualLeave);
+    const todaySt=getDayStatus(emp.id,today);
+    
+    const todayTrip = schedules.some(s => s.empId === emp.id && s.type === 'Business Trip' && today >= s.startDate && today <= s.endDate);
+    const todayMeet = schedules.some(s => s.empId === emp.id && s.type === 'Meeting' && today >= s.startDate && today <= s.endDate);
+
+    let stBadge = '';
+    if (todaySt === 'holiday') stBadge = badge('Holiday','warning');
+    else if (todaySt === 'leave') stBadge = badge('On Leave','info');
+    else if (todayTrip) stBadge = `<span class="badge" style="background:#ede9fe;color:#8b5cf6">Business Trip</span>`;
+    else if (todayMeet) stBadge = `<span class="badge" style="background:#e0f2fe;color:#0ea5e9">Meeting</span>`;
+    else if (todaySt === 'weekend') stBadge = badge('Weekend','gray');
+    else {
+        const a = getAtt(emp.id,today);
+        stBadge = a&&a.checkIn ? badge(STATUS[a.status]||'Present','success') : `<span style="font-size:11px;color:#bbb">No Record</span>`;
+    }
+
+    return`<div class="lsc"><div class="lsc-name">${emp.name}</div><div class="lsc-pos">${emp.position}</div>
+      <div class="lsc-row"><span style="color:#888">Today</span><span>${stBadge}</span></div>
+      <div class="lsc-row"><span style="color:#888">Balance</span><span style="color:${rc};font-weight:600">${rem}/${emp.annualLeave}d</span></div></div>`;
+  }).join('');
 
   if(!isAdmin){
     const emp=employees.find(e=>e.id===session.empId);
@@ -493,14 +515,20 @@ function renderDashboard(){
     const used=usedLeave(emp.id),rem=emp.annualLeave-used;
     const stBadge=a&&a.status?badge(STATUS[a.status]||a.status,a.status==='normal'?'success':a.status==='absent'?'danger':'warning'):'<span style="color:#bbb">Not recorded</span>';
     const myLeaves=[...leaves].filter(l=>l.empId===emp.id).sort((a,b)=>b.id-a.id).slice(0,5);
+    
     return`<div class="stat-grid">
       <div class="stat"><div class="stat-lbl">Today's Status</div><div style="margin-top:5px">${stBadge}</div></div>
       <div class="stat"><div class="stat-lbl">Check In</div><div class="stat-val" style="font-size:17px">${a.checkIn||'—'}</div></div>
       <div class="stat"><div class="stat-lbl">Leave Balance</div><div class="stat-val" style="color:${remColor(rem,emp.annualLeave)}">${rem}<span style="font-size:12px;color:#aaa">/${emp.annualLeave}d</span></div></div>
       <div class="stat"><div class="stat-lbl">Pending Requests</div><div class="stat-val" style="color:#b45309">${leaves.filter(l=>l.empId===emp.id&&l.status==='pending').length}</div></div>
     </div>
+    
+    <div class="sec-title">Team Status</div>
+    <div class="leave-status-grid">${lsCards}</div>
+    
     ${calHTML}
     ${schedArea}
+    
     <div class="card"><div class="card-title">My Leave Requests</div>
     <table><thead><tr><th>Type</th><th>Start</th><th>End</th><th>Days</th><th>Status</th></tr></thead>
     <tbody>${myLeaves.length?myLeaves.map(l=>{const s={approved:{l:'Approved',c:'success'},rejected:{l:'Rejected',c:'danger'},pending:{l:'Pending',c:'warning'}}[l.status];return`<tr><td>${l.type}</td><td>${l.startDate}</td><td>${l.endDate}</td><td>${l.days}</td><td>${badge(s.l,s.c)}</td></tr>`;}).join(''):'<tr><td colspan="5" class="empty">No requests yet</td></tr>'}</tbody></table>
@@ -509,14 +537,6 @@ function renderDashboard(){
 
   const present=employees.filter(e=>{const a=getAtt(e.id,today);return a&&a.checkIn;}).length;
   const pending=leaves.filter(l=>l.status==='pending');
-  const lsCards=employees.map(emp=>{
-    const used=usedLeave(emp.id),rem=emp.annualLeave-used,rc=remColor(rem,emp.annualLeave);
-    const todaySt=getDayStatus(emp.id,today);
-    const stBadge=todaySt==='holiday'?badge('Holiday','warning'):todaySt==='leave'?badge('On Leave','info'):todaySt==='weekend'?badge('Weekend','gray'):(()=>{const a=getAtt(emp.id,today);return a&&a.checkIn?badge(STATUS[a.status]||'Present','success'):`<span style="font-size:11px;color:#bbb">No Record</span>`;})();
-    return`<div class="lsc"><div class="lsc-name">${emp.name}</div><div class="lsc-pos">${emp.position}</div>
-      <div class="lsc-row"><span style="color:#888">Today</span><span>${stBadge}</span></div>
-      <div class="lsc-row"><span style="color:#888">Balance</span><span style="color:${rc};font-weight:600">${rem}/${emp.annualLeave}d</span></div></div>`;
-  }).join('');
   const pendingHTML=pending.length?`<div class="sec-title">⏳ Pending Leave Requests (${pending.length})</div>
     ${pending.map(l=>{const emp=employees.find(e=>e.id===l.empId);return`<div class="pcard"><div><strong>${emp?.name}</strong> <span style="margin:0 6px;color:#aaa">|</span><span style="color:#555">${l.type} · ${l.startDate} → ${l.endDate} (${l.days}d)</span><span style="color:#aaa;margin-left:6px;font-size:12px">${l.reason}</span></div><div style="display:flex;gap:6px"><button class="btn btn-success btn-sm" onclick="approveLeave(${l.id},'approved')">✓ Approve</button><button class="btn btn-danger btn-sm" onclick="approveLeave(${l.id},'rejected')">✗ Reject</button></div></div>`;}).join('')}`:'';
   
@@ -526,7 +546,7 @@ function renderDashboard(){
     <div class="stat"><div class="stat-lbl">Holidays This Month</div><div class="stat-val" style="color:#b45309">${holidays.filter(h=>h.date.startsWith(calMonth)).length}</div></div>
     <div class="stat"><div class="stat-lbl">Total Employees</div><div class="stat-val" style="color:#1a56db">${employees.length}</div></div>
   </div>
-  <div class="sec-title">Employee Status</div>
+  <div class="sec-title">Team Status</div>
   <div class="leave-status-grid">${lsCards}</div>
   ${calHTML}
   ${schedArea}
@@ -902,7 +922,6 @@ function exportExcel(){
       if(isLeaveDay(emp.id,ds)){totalH+=8;continue;}
       const a=getAtt(emp.id,ds);
       
-      // If no attendance check-in but they are on a trip, we estimate 8 hours
       const onTrip = schedules.some(s => s.empId === emp.id && s.type === 'Business Trip' && ds >= s.startDate && ds <= s.endDate);
       if(!a.checkIn && onTrip) {
           totalH += 8;
@@ -931,7 +950,6 @@ function exportExcel(){
       else if(a.checkIn){row[2]=timeToFrac(a.checkIn);row[3]=timeToFrac(a.checkOut)||17/24;row[4]=calcHours(a.checkIn,a.checkOut||'17:00');}
       else if(a.status==='absent'){}
       else{
-          // If not checked in, but on a business trip, assume 8-17 schedule
           const onTrip = schedsToday.some(s => s.type === 'Business Trip');
           if (onTrip && !a.status) {
               row[2]=8/24;row[3]=17/24;row[4]=8;
@@ -940,7 +958,6 @@ function exportExcel(){
           }
       }
 
-      // Add schedules (Trips/Meetings) to the Notes column for the report
       if (schedTexts) {
           row[16] = row[16] ? row[16] + ' | ' + schedTexts : schedTexts;
       }
@@ -997,9 +1014,7 @@ async function reloadFromFirebase(){
 // INIT
 // ════════════════════════════════════════
 (async function init(){
-  // Firebase에서 데이터 로드 (로컬 덮어쓰기 방지)
   await loadFromFirebase();
-  // Firebase에 데이터가 없을 때만 기본값 (Firebase에 저장하지 않음)
   if(!employees.length) employees=JSON.parse(JSON.stringify(INIT_EMP));
   if(!holidays.length) holidays=[{id:1,date:'2026-05-01',name:'Labour Day'},{id:2,date:'2026-05-03',name:'Constitution Day'}];
   buildLoginSel();
