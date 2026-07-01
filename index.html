@@ -631,7 +631,6 @@ function deleteEvent(id){
   const ev=events.find(e=>e.id===id);
   if(confirm(`Delete "${ev?.title}"?`)){events=events.filter(e=>e.id!==id);save();render();}
 }
-}
 
 // ── EMPLOYEES ──
 function renderEmployees(){
