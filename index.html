@@ -105,7 +105,7 @@ input:focus,select:focus{border-color:#1a56db}
 .cal-chip{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:8px;font-weight:800;color:#fff;cursor:default;transition:transform .1s}
 .cal-chip:hover{transform:scale(1.3)}
 .cal-chip.norecord{opacity:.3}
-.cal-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:11px;color:#666}
+.cal-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:11px;color:#666;align-items:center}
 .leave-status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
 .lsc{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:12px}
 .lsc-name{font-size:13px;font-weight:700}
@@ -392,16 +392,36 @@ function renderCalendar(ym,forEmpId){
     const dispEmps=forEmpId?employees.filter(e=>e.id===forEmpId):employees;
     let dots=dispEmps.map(emp=>{
       const st=getDayStatus(emp.id,ds);
+      const lv=isLeaveDay(emp.id,ds); // Get specific leave info
       const isTrip = schedules.some(s => s.empId === emp.id && s.type === 'Business Trip' && ds >= s.startDate && ds <= s.endDate);
       const isMeet = schedules.some(s => s.empId === emp.id && s.type === 'Meeting' && ds >= s.startDate && ds <= s.endDate);
 
-      let c = dotColor[st] || '#ddd';
-      if(isTrip) c = '#8b5cf6'; // Purple for Trip
-      else if(isMeet) c = '#0ea5e9'; // Blue for Meeting
+      let bg = dotColor[st] || '#ddd';
+      let titleSt = st;
+
+      if(isTrip) { bg = '#8b5cf6'; titleSt = 'Business Trip'; }
+      else if(isMeet) { bg = '#0ea5e9'; titleSt = 'Meeting'; }
+      else if(st === 'leave' && lv) {
+         titleSt = lv.type; // Hover 시 반차/연차 표시
+         
+         // 출근 기록 유무 확인 (반차 시 나머지 반나절을 초록색/회색으로 분기)
+         const a = getAtt(emp.id, ds);
+         const otherHalf = (a && a.checkIn) ? '#0a7c4d' : '#ddd';
+
+         if (lv.type === 'Half Day (AM)') {
+            bg = `linear-gradient(to right, #1a56db 50%, ${otherHalf} 50%)`;
+         } else if (lv.type === 'Half Day (PM)') {
+            bg = `linear-gradient(to right, ${otherHalf} 50%, #1a56db 50%)`;
+         } else {
+            bg = '#1a56db'; // 일반 연차는 전체 파란색
+         }
+      }
 
       const ini=emp.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-      const nr=(st==='norecord'||st==='weekend') && !isTrip && !isMeet ? 'norecord' : '';
-      return`<div class="cal-chip ${nr}" style="background:${c}" title="${emp.name}: ${isTrip?'Business Trip':isMeet?'Meeting':st}">${ini}</div>`;
+      const nr=(st==='norecord'||st==='weekend') && !isTrip && !isMeet && !lv ? 'norecord' : '';
+      
+      // text-shadow 추가하여 그라데이션 위에서도 텍스트가 잘 보이게 처리
+      return`<div class="cal-chip ${nr}" style="background:${bg}; text-shadow:0px 1px 2px rgba(0,0,0,0.5);" title="${emp.name}: ${titleSt}">${ini}</div>`;
     }).join('');
     html+=`<div class="${cls}">
       <div class="cal-day-num">${d}</div>
@@ -442,6 +462,8 @@ function renderDashboard(){
     <div class="cal-legend">
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0a7c4d;margin-right:3px"></span>Present</span>
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#1a56db;margin-right:3px"></span>Leave</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:linear-gradient(to right, #1a56db 50%, #ddd 50%);margin-right:3px"></span>AM Half</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:linear-gradient(to right, #ddd 50%, #1a56db 50%);margin-right:3px"></span>PM Half</span>
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#8b5cf6;margin-right:3px"></span>Trip</span>
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0ea5e9;margin-right:3px"></span>Meeting</span>
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#b91c1c;margin-right:3px"></span>Absent</span>
@@ -495,7 +517,10 @@ function renderDashboard(){
 
     let stBadge = '';
     if (todaySt === 'holiday') stBadge = badge('Holiday','warning');
-    else if (todaySt === 'leave') stBadge = badge('On Leave','info');
+    else if (todaySt === 'leave') {
+        const lv=isLeaveDay(emp.id,today);
+        stBadge = lv&&lv.type.includes('Half') ? badge('Half Day','info') : badge('On Leave','info');
+    }
     else if (todayTrip) stBadge = `<span class="badge" style="background:#ede9fe;color:#8b5cf6">Business Trip</span>`;
     else if (todayMeet) stBadge = `<span class="badge" style="background:#e0f2fe;color:#0ea5e9">Meeting</span>`;
     else if (todaySt === 'weekend') stBadge = badge('Weekend','gray');
